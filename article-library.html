@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="资料库">
+  <meta name="theme-color" content="#A8C5E0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%23A8C5E0'/%3E%3Cpath%20d='M9%2013l7-4%207%204v7l-7%204-7-4z'%20fill='%23F5E6C8'%20stroke='%238B6F3D'%20stroke-width='1.5'/%3E%3C/svg%3E">
+  <title>文章资料库 - 个人工作台</title>
+  <style>
+    :root {
+      --bg: #FDFBF7;
+      --card: #FFFFFF;
+      --blue: #A8C5E0;
+      --blue-dark: #4A6FA5;
+      --blue-light: #E8F0F8;
+      --cream: #F5E6C8;
+      --cream-dark: #8B6F3D;
+      --cream-light: #FCF6EB;
+      --red: #D97A7A;
+      --red-light: #F5D5D3;
+      --green: #6FAE7C;
+      --green-light: #D8EDD8;
+      --text: #3A3A3A;
+      --text-light: #888888;
+      --radius: 14px;
+      --shadow: 0 2px 8px rgba(58,58,58,0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* 顶部导航 */
+    .header {
+      background: linear-gradient(135deg, var(--blue-light) 0%, var(--cream-light) 100%);
+      border-bottom: 1px solid rgba(168,197,224,0.3);
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--card);
+      color: var(--blue-dark);
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+      transition: transform 0.15s;
+    }
+    .back-btn:hover { transform: translateY(-1px); }
+    .header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* 按钮 */
+    .btn {
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 10px;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: #97B8D8; }
+    .btn-cream { background: var(--cream); color: var(--cream-dark); }
+    .btn-cream:hover { background: #EDDAB5; }
+    .btn-ghost { background: transparent; color: var(--text-light); }
+    .btn-ghost:hover { background: #F0F0F0; }
+    .btn-red { background: var(--red); color: #fff; }
+    .btn-red:hover { background: #C96A6A; }
+    .btn-sm { font-size: 12px; padding: 6px 10px; min-height: 30px; }
+
+    /* 主体 */
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* 统计卡 */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(168,197,224,0.2);
+    }
+    .stat-number {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--blue-dark);
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 4px;
+    }
+
+    /* 表单卡片 */
+    .form-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(168,197,224,0.2);
+      margin-bottom: 20px;
+    }
+    .form-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .form-row { margin-bottom: 14px; }
+    .form-row:last-child { margin-bottom: 0; }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .form-input, .form-textarea {
+      width: 100%;
+      border: 1px solid #E0E0E0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 15px;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-textarea:focus { border-color: var(--blue); }
+    .form-textarea { min-height: 80px; resize: vertical; }
+    .form-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+    /* 搜索筛选 */
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .search-input {
+      flex: 1;
+      min-width: 200px;
+    }
+    .tag-filter {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 16px;
+      background: var(--cream-light);
+      color: var(--cream-dark);
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+    }
+    .tag:hover { background: var(--cream); }
+    .tag.active { background: var(--blue); color: #fff; }
+
+    /* 文章列表 */
+    .article-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .article-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(168,197,224,0.2);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .article-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(58,58,58,0.1);
+    }
+    .article-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .article-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--blue-dark);
+      line-height: 1.4;
+      flex: 1;
+      word-break: break-word;
+    }
+    .article-title:hover { text-decoration: underline; }
+    .article-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .article-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      font-weight: 600;
+    }
+    .article-date {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+    .article-note {
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-bottom: 10px;
+    }
+    .article-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* 空状态 */
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-light);
+    }
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+    .empty-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    .empty-desc { font-size: 14px; }
+
+    /* 提示 */
+    .toast {
+      position: fixed;
+      bottom: calc(24px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .toast.show { opacity: 1; }
+
+    /* 模态框 */
+    .modal-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(58,58,58,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+      z-index: 100;
+    }
+    .modal {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 24px;
+      width: 100%;
+      max-width: 460px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; }
+    .modal-close {
+      width: 32px; height: 32px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 22px;
+      color: var(--text-light);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-close:hover { background: var(--bg); }
+
+    @media (max-width: 600px) {
+      .header-title { font-size: 16px; }
+      .container { padding: 16px; }
+      .form-card { padding: 16px; }
+      .article-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-left">
+        <a href="./index.html" class="back-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          工作台
+        </a>
+        <div class="header-title" style="display: flex; align-items: center; gap: 8px;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B6F3D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8L12 4L21 8V16L12 20L3 16V8Z" fill="#F5E6C8"/>
+            <path d="M12 12V20" stroke="#8B6F3D"/>
+            <path d="M8 10L12 12L16 10" stroke="#8B6F3D"/>
+          </svg>
+          文章资料库
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-cream btn-sm" id="exportBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出
+        </button>
+        <button class="btn btn-cream btn-sm" id="importBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          导入
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 统计 -->
+    <div class="stats">
+      <div class="stat-card"><div class="stat-number" id="totalCount">0</div><div class="stat-label">总收藏</div></div>
+      <div class="stat-card"><div class="stat-number" id="weekCount">0</div><div class="stat-label">本周新增</div></div>
+      <div class="stat-card"><div class="stat-number" id="tagCount">0</div><div class="stat-label">标签数</div></div>
+    </div>
+
+    <!-- 添加/编辑表单 -->
+    <div class="form-card">
+      <div class="form-title" id="formTitle">收藏新文章</div>
+      <input type="hidden" id="editId">
+      <div class="form-row">
+        <label class="form-label">文章标题 *</label>
+        <input class="form-input" id="title" placeholder="请输入文章标题">
+      </div>
+      <div class="form-row">
+        <label class="form-label">文章链接 *</label>
+        <input class="form-input" id="url" placeholder="https://...">
+      </div>
+      <div class="form-row">
+        <label class="form-label">标签（用逗号分隔）</label>
+        <input class="form-input" id="tags" placeholder="品牌营销, AI, 方法论">
+      </div>
+      <div class="form-row">
+        <label class="form-label">备注</label>
+        <textarea class="form-textarea" id="note" placeholder="记录这篇文章的亮点、适用场景或读后感"></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="saveBtn">保存收藏</button>
+        <button class="btn btn-ghost" id="cancelEditBtn" style="display:none;">取消编辑</button>
+      </div>
+    </div>
+
+    <!-- 搜索筛选 -->
+    <div class="filter-bar">
+      <input class="form-input search-input" id="searchInput" placeholder="搜索标题、标签、备注...">
+    </div>
+    <div class="tag-filter" id="tagFilter"></div>
+
+    <!-- 文章列表 -->
+    <div class="article-list" id="articleList"></div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <input type="file" id="importFile" accept=".json" style="display:none;">
+
+  <script>
+    const STORAGE_KEY = 'wb_life_articles';
+
+    function $(s) { return document.querySelector(s); }
+    function $$(s) { return Array.from(document.querySelectorAll(s)); }
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+    function today() { return new Date().toISOString().slice(0, 10); }
+    function escapeHtml(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+    function getArticles() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+      catch (e) { return []; }
+    }
+    function setArticles(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); SYNC.schedulePush(); }
+
+    // ===== 云端同步层 (Supabase 直连 + 客户端加密) =====
+    const SUPABASE = {
+      url: 'https://vfjsrixcxcvqscrbdyye.supabase.co/rest/v1',
+      key: 'sb_publishable_AHtUtAYFy3wQBCkSxOsU1Q_z7m1O7Ij',
+      table: 'wb_sync'
+    };
+    const SYNC_AVAIL = !!(window.crypto && window.crypto.subtle);
+    const SYNC = (function () {
+      const SLOT = 'main';
+      const PREFIX = 'wb_life_';
+      let pw = sessionStorage.getItem('wb_life_sync_pw') || '';
+      let online = false;
+      let suppress = false;
+      let timer = null;
+      function bytesToB64(bytes){ let s=''; const c=0x8000; for(let i=0;i<bytes.length;i+=c){ s+=String.fromCharCode.apply(null, bytes.subarray(i,i+c)); } return btoa(s); }
+      function b64ToBytes(b64){ const bin=atob(b64); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
+      async function sha256Hex(str){ const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+      async function deriveKey(p, salt){ const base=await crypto.subtle.importKey('raw', new TextEncoder().encode(p), 'PBKDF2', false, ['deriveKey']); return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:100000, hash:'SHA-256'}, base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); }
+      async function encryptObj(obj, p){ const salt=crypto.getRandomValues(new Uint8Array(16)); const iv=crypto.getRandomValues(new Uint8Array(12)); const key=await deriveKey(p,salt); const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, new TextEncoder().encode(JSON.stringify(obj))); const packed=new Uint8Array(28+ct.byteLength); packed.set(salt,0); packed.set(iv,16); packed.set(new Uint8Array(ct),28); return bytesToB64(packed); }
+      async function decryptObj(b64, p){ const packed=b64ToBytes(b64); const salt=packed.slice(0,16), iv=packed.slice(16,28), ct=packed.slice(28); const key=await deriveKey(p,salt); const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv}, key, ct); return JSON.parse(new TextDecoder().decode(pt)); }
+      async function sbGet(){ const r=await fetch(`${SUPABASE.url}/${SUPABASE.table}?slot=eq.${SLOT}&select=*`, { headers:{ apikey:SUPABASE.key, Authorization:`Bearer ${SUPABASE.key}` } }); if(!r.ok) throw new Error('拉取失败 '+r.status); const rows=await r.json(); return rows[0]||null; }
+      async function sbWrite(row){ const h={ apikey:SUPABASE.key, Authorization:`Bearer ${SUPABASE.key}`, 'Content-Type':'application/json' }; const existing=await sbGet(); if(existing){ const r=await fetch(`${SUPABASE.url}/${SUPABASE.table}?slot=eq.${SLOT}`, { method:'PATCH', headers:h, body:JSON.stringify({ pwcheck:row.pwcheck, payload:row.payload, updated_at:row.updated_at }) }); if(!r.ok) throw new Error('保存失败 '+r.status); } else { const r=await fetch(`${SUPABASE.url}/${SUPABASE.table}`, { method:'POST', headers:h, body:JSON.stringify([row]) }); if(!r.ok) throw new Error('保存失败 '+r.status); } }
+      function collect(){ const d={}; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(PREFIX)) d[k]=localStorage.getItem(k); } return d; }
+      function apply(obj){ if(!obj) return; suppress=true; Object.keys(obj).forEach(k=>{ if(k.startsWith(PREFIX)) localStorage.setItem(k, obj[k]); }); suppress=false; }
+      async function pull(){ if(!pw) return {ok:false, reason:'nopw'}; try{ const row=await sbGet(); if(!row||!row.payload){ online=true; return {ok:false, reason:'empty'}; } const check=await sha256Hex(pw); if(row.pwcheck && row.pwcheck!==check){ online=true; return {ok:false, reason:'mismatch'}; } const obj=await decryptObj(row.payload, pw); apply(obj); online=true; return {ok:true}; }catch(e){ online=false; return {ok:false, reason:'error', err:e}; } }
+      async function push(){ if(!pw||suppress) return; try{ const payload=await encryptObj(collect(), pw); const pwcheck=await sha256Hex(pw); await sbWrite({ slot:SLOT, pwcheck, payload, updated_at:new Date().toISOString() }); online=true; }catch(e){ online=false; } }
+      function schedulePush(){ if(!pw) return; clearTimeout(timer); timer=setTimeout(()=>push(), 1000); }
+      function setPw(p){ pw=p; if(p) sessionStorage.setItem('wb_life_sync_pw', p); else sessionStorage.removeItem('wb_life_sync_pw'); }
+      const getPw=()=>pw;
+      const isOnline=()=>online;
+      return { setPw, getPw, isOnline, schedulePush, pull, push, collect, apply };
+    })();
+
+    function showSyncGate() {
+      return new Promise((resolve) => {
+        const mask = document.createElement('div');
+        mask.style.cssText = 'position:fixed;inset:0;background:rgba(20,28,40,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));';
+        mask.innerHTML = '<div style="background:#fff;border-radius:18px;padding:26px 24px;max-width:380px;width:100%;box-shadow:0 12px 48px rgba(0,0,0,.25);">'
+          + '<div style="text-align:center;font-size:18px;font-weight:700;color:#333;">云端同步</div>'
+          + '<div style="font-size:13px;color:#888;margin-top:10px;line-height:1.6;text-align:center;">设置一个你记得住的密码，<b>手机和电脑用同一个密码</b>即可自动同步。<br>数据已加密存储，<b>忘记密码将无法恢复</b>。</div>'
+          + '<input id="syncPw" type="password" inputmode="text" autocomplete="off" style="margin-top:16px;width:100%;box-sizing:border-box;padding:13px 14px;font-size:16px;border:1.5px solid #E3E8F0;border-radius:10px;outline:none;" placeholder="输入同步密码">'
+          + '<div id="syncErr" style="color:#E0573E;font-size:12px;min-height:16px;margin:7px 2px 0;"></div>'
+          + '<button id="syncOk" style="margin-top:10px;width:100%;padding:13px;border:none;border-radius:10px;background:#7BAFD4;color:#fff;font-size:15px;font-weight:600;cursor:pointer;">开启同步</button>'
+          + '<button id="syncSkip" style="margin-top:9px;width:100%;padding:11px;border:none;border-radius:10px;background:#F0F2F5;color:#666;font-size:14px;cursor:pointer;">暂不同步（本地使用）</button></div>';
+        document.body.appendChild(mask);
+        const input = mask.querySelector('#syncPw');
+        const err = mask.querySelector('#syncErr');
+        setTimeout(() => input.focus(), 50);
+        const close = () => mask.remove();
+        const ok = () => { const v = input.value; if (v.length < 4) { err.textContent = '密码至少 4 位'; input.focus(); return; } close(); resolve(v); };
+        mask.querySelector('#syncOk').onclick = ok;
+        mask.querySelector('#syncSkip').onclick = () => { close(); resolve(null); };
+        input.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
+      });
+    }
+
+    async function ensureUnlocked() {
+      if (!SYNC_AVAIL) { toast('当前环境不支持加密同步，使用本地数据', 'info'); return; }
+      if (SYNC.getPw()) {
+        const r = await SYNC.pull();
+        if (r.ok) toast('已从云端同步', 'success');
+        else if (r.reason === 'mismatch') toast('同步密码与云端不符，使用本地数据', 'error');
+        else if (!SYNC.isOnline()) toast('未连接云端，使用本地数据', 'info');
+        return;
+      }
+      const p = await showSyncGate();
+      if (!p) { toast('未开启同步，仅本地使用', 'info'); return; }
+      SYNC.setPw(p);
+      const r = await SYNC.pull();
+      if (r.ok) toast('已从云端同步', 'success');
+      else if (r.reason === 'empty') { await SYNC.push(); toast('已创建云端备份', 'success'); }
+      else if (r.reason === 'mismatch') { SYNC.setPw(''); sessionStorage.removeItem('wb_life_sync_pw'); toast('密码与云端不符，请重新输入', 'error'); return ensureUnlocked(); }
+      else if (!SYNC.isOnline()) toast('未连接云端，使用本地数据', 'info');
+    }
+
+    let currentTag = '全部';
+    let searchTerm = '';
+
+    function render() {
+      const articles = getArticles();
+      const filtered = filterArticles(articles);
+
+      // 统计
+      $('#totalCount').textContent = articles.length;
+      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      weekStart.setHours(0,0,0,0);
+      $('#weekCount').textContent = articles.filter(a => new Date(a.date || '2000-01-01') >= weekStart).length;
+      const allTags = new Set();
+      articles.forEach(a => (a.tags || []).forEach(t => allTags.add(t.trim())));
+      $('#tagCount').textContent = allTags.size;
+
+      // 标签筛选
+      renderTagFilter(Array.from(allTags).sort());
+
+      // 列表
+      const listEl = $('#articleList');
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="empty"><div class="empty-icon"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#AAAAAA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8L12 4L21 8V16L12 20L3 16V8Z"/><path d="M12 12V20"/><path d="M8 10L12 12L16 10"/></svg></div><div class="empty-title">资料库还是空的</div><div class="empty-desc">在上方填入文章标题和链接，开始搭建你的个人资料库</div></div>`;
+        return;
+      }
+      listEl.innerHTML = filtered.map(a => {
+        const tags = (a.tags || []).map(t => `<span class="article-tag">${escapeHtml(t.trim())}</span>`).join('');
+        return `<div class="article-card" data-id="${a.id}">
+          <div class="article-header">
+            <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" class="article-title">${escapeHtml(a.title) || '未命名文章'}</a>
+          </div>
+          <div class="article-meta">
+            ${tags}
+            <span class="article-date">${escapeHtml(a.date || '')}</span>
+          </div>
+          ${a.note ? `<div class="article-note">${escapeHtml(a.note)}</div>` : ''}
+          <div class="article-actions">
+            <button class="btn btn-cream btn-sm" onclick="editArticle('${a.id}')">编辑</button>
+            <button class="btn btn-red btn-sm" onclick="deleteArticle('${a.id}')">删除</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function filterArticles(articles) {
+      return articles.filter(a => {
+        const matchesTag = currentTag === '全部' || (a.tags || []).some(t => t.trim() === currentTag);
+        const term = searchTerm.toLowerCase().trim();
+        const matchesSearch = !term ||
+          (a.title || '').toLowerCase().includes(term) ||
+          (a.note || '').toLowerCase().includes(term) ||
+          (a.tags || []).some(t => t.toLowerCase().includes(term));
+        return matchesTag && matchesSearch;
+      }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    }
+
+    function renderTagFilter(tags) {
+      const allTags = ['全部', ...tags];
+      $('#tagFilter').innerHTML = allTags.map(t => `<span class="tag ${currentTag === t ? 'active' : ''}" onclick="setTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('');
+    }
+
+    window.setTag = function(tag) {
+      currentTag = tag;
+      render();
+    };
+
+    function saveArticle() {
+      const title = $('#title').value.trim();
+      const url = $('#url').value.trim();
+      const tags = $('#tags').value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+      const note = $('#note').value.trim();
+      const editId = $('#editId').value;
+
+      if (!title) { toast('请填写文章标题', 'error'); return; }
+      if (!url) { toast('请填写文章链接', 'error'); return; }
+      if (!/^https?:\/\//i.test(url)) { toast('链接需要以 http:// 或 https:// 开头', 'error'); return; }
+
+      const articles = getArticles();
+      if (editId) {
+        const idx = articles.findIndex(a => a.id === editId);
+        if (idx >= 0) {
+          articles[idx] = { ...articles[idx], title, url, tags, note };
+          toast('已更新', 'success');
+        }
+      } else {
+        articles.unshift({ id: uid(), title, url, tags, note, date: today(), createdAt: new Date().toISOString() });
+        toast('已收藏', 'success');
+      }
+      setArticles(articles);
+      resetForm();
+      render();
+    }
+
+    window.editArticle = function(id) {
+      const a = getArticles().find(x => x.id === id);
+      if (!a) return;
+      $('#editId').value = id;
+      $('#title').value = a.title || '';
+      $('#url').value = a.url || '';
+      $('#tags').value = (a.tags || []).join(', ');
+      $('#note').value = a.note || '';
+      $('#formTitle').textContent = '编辑文章';
+      $('#saveBtn').textContent = '更新收藏';
+      $('#cancelEditBtn').style.display = 'inline-flex';
+      $('#title').focus();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.deleteArticle = function(id) {
+      if (!confirm('确定要删除这条收藏吗？')) return;
+      const articles = getArticles().filter(a => a.id !== id);
+      setArticles(articles);
+      toast('已删除', 'success');
+      render();
+    };
+
+    function resetForm() {
+      $('#editId').value = '';
+      $('#title').value = '';
+      $('#url').value = '';
+      $('#tags').value = '';
+      $('#note').value = '';
+      $('#formTitle').textContent = '收藏新文章';
+      $('#saveBtn').textContent = '保存收藏';
+      $('#cancelEditBtn').style.display = 'none';
+    }
+
+    function exportData() {
+      const data = { [STORAGE_KEY]: localStorage.getItem(STORAGE_KEY) || '[]', exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `article-library-backup-${today()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('备份已下载', 'success');
+    }
+
+    function importData(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (data[STORAGE_KEY]) {
+            localStorage.setItem(STORAGE_KEY, data[STORAGE_KEY]);
+            SYNC.schedulePush();
+            toast('导入成功', 'success');
+            render();
+          } else {
+            toast('文件格式不正确', 'error');
+          }
+        } catch (e) {
+          toast('导入失败：' + e.message, 'error');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function toast(msg, type) {
+      const el = $('#toast');
+      el.textContent = msg;
+      el.style.background = type === 'error' ? 'var(--red)' : (type === 'success' ? 'var(--green)' : 'var(--text)');
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2500);
+    }
+
+    // 事件绑定
+    $('#saveBtn').onclick = saveArticle;
+    $('#cancelEditBtn').onclick = resetForm;
+    $('#exportBtn').onclick = exportData;
+    $('#importBtn').onclick = () => $('#importFile').click();
+    $('#importFile').onchange = (e) => { importData(e.target.files[0]); e.target.value = ''; };
+    $('#searchInput').oninput = (e) => { searchTerm = e.target.value; render(); };
+
+    // 表单回车快捷保存
+    $('#title').onkeydown = (e) => { if (e.key === 'Enter') $('#url').focus(); };
+    $('#url').onkeydown = (e) => { if (e.key === 'Enter') $('#tags').focus(); };
+    $('#tags').onkeydown = (e) => { if (e.key === 'Enter') $('#note').focus(); };
+    $('#note').onkeydown = (e) => { if (e.key === 'Enter' && e.metaKey) saveArticle(); };
+
+    (async () => {
+      await ensureUnlocked();
+      render();
+    })();
+  </script>
+</body>
+</html>
