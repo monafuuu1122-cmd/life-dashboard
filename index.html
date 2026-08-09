@@ -974,7 +974,8 @@ const STAGE_SUGGESTIONS = {
   book: ['想读', '在读', '已读', '已复盘'],
   spot: ['想去', '计划中', '已去', '已推荐'],
   essay: ['草稿', '已整理', '已发布'],
-  topic: ['观察中', '选题中', '写作中', '已发布']
+  topic: ['观察中', '选题中', '写作中', '已发布'],
+  ent: ['观察中', '学习中', '已拆解', '已应用', '已归档']
 };
 function stageInputHtml(id, value, type) {
   const suggestions = STAGE_SUGGESTIONS[type] || [];
@@ -1131,11 +1132,12 @@ function renderToday() {
 // ===== 职业学习 =====
 function renderCareer() {
   const sub = currentSubtab.career || 'cases';
-  const subs = [{ key: 'cases', label: '品牌案例' }, { key: 'trends', label: '行业趋势' }, { key: 'ai', label: 'AI 学习' }];
+  const subs = [{ key: 'cases', label: '品牌案例' }, { key: 'trends', label: '行业趋势' }, { key: 'ai', label: 'AI 学习' }, { key: 'ent', label: '文娱行业学习' }];
   let html = `<div class="section-header"><svg class="section-icon" viewBox="0 0 100 100"><rect x="15" y="20" width="70" height="60" rx="6" fill="#A8C5E0" stroke="#3A3A3A" stroke-width="2"/><line x1="15" y1="35" x2="85" y2="35" stroke="#3A3A3A" stroke-width="2"/><line x1="30" y1="48" x2="70" y2="48" stroke="white" stroke-width="3"/><line x1="30" y1="58" x2="65" y2="58" stroke="white" stroke-width="3"/><line x1="30" y1="68" x2="55" y2="68" stroke="white" stroke-width="3"/></svg><div class="section-title">职业学习</div><div class="section-subtitle">每日 10:00 提醒 · 案例/趋势目标各 2 条</div></div><div class="subtabs">${subs.map(s => `<button class="subtab ${sub === s.key ? 'active' : ''}" data-sub="${s.key}">${s.label}</button>`).join('')}</div>`;
   if (sub === 'cases') html += renderCases();
   else if (sub === 'trends') html += renderTrends();
   else if (sub === 'ai') html += renderAI();
+  else if (sub === 'ent') html += renderEnt();
   return html;
 }
 
@@ -1225,6 +1227,33 @@ function renderAI() {
       ${n.url ? `<div style="margin-top: 8px; font-size: 12px; color: var(--text-light);">🔗 ${escapeHtml(n.url)}</div>` : ''}
       <div class="card-actions"><button class="btn btn-ghost btn-sm" data-edit="${n.id}">编辑</button><button class="btn btn-ghost btn-sm" data-del="${n.id}">删除</button></div>
     </div>`).join('')}</div>`;
+}
+
+function renderEnt() {
+  const ents = STORAGE.get('ent', []);
+  const list = ents.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  let html = `<div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+    <button class="btn btn-primary" id="addEnt">+ 新增文娱案例</button>
+    <button class="btn btn-cream" id="aiEnt">✨ AI 搜文娱案例</button>
+  </div>`;
+  html += `<div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: var(--blue-dark);">🎭 聚焦 2025-2026 中国文娱行业（演出 / 电视剧 / 电影 / 互联网娱乐 / 网络娱乐）的成功案例，支持按平台或具体艺术行业定向搜索</div>`;
+  html += `<div class="list">`;
+  if (list.length === 0) {
+    html += `<div class="list-empty"><div class="list-empty-icon">🎭</div>还没有文娱案例，点击上方按钮添加或 AI 搜索</div>`;
+  } else {
+    html += list.map(c => `<div class="case-card" data-id="${c.id}">
+      <div class="case-brand">${escapeHtml(c.brand)} · ${escapeHtml(c.industry || '')}</div>
+      <div class="card-title">${escapeHtml(c.title)}</div>
+      <div class="card-meta"><span class="tag cream">📅 ${c.date}</span>${stageTagHtml(c.currentStage)}${c.tags ? c.tags.split(',').map(t => `<span class="tag">${escapeHtml(t.trim())}</span>`).join('') : ''}</div>
+      <div class="case-section"><div class="case-section-title">▎成功策略</div><div class="case-section-content">${escapeHtml(c.strategy || '')}</div></div>
+      <div class="case-section"><div class="case-section-title">▎渠道/平台</div><div class="case-section-content">${escapeHtml(c.channel || '')}</div></div>
+      <div class="case-section"><div class="case-section-title">▎成效</div><div class="case-section-content">${escapeHtml(c.effect || '')}</div></div>
+      ${c.note ? `<div class="case-section"><div class="case-section-title">▎学习要点</div><div class="case-section-content">${escapeHtml(c.note)}</div></div>` : ''}
+      <div class="card-actions"><button class="btn btn-ghost btn-sm" data-edit="${c.id}">编辑</button><button class="btn btn-ghost btn-sm" data-del="${c.id}">删除</button></div>
+    </div>`).join('');
+  }
+  html += `</div>`;
+  return html;
 }
 
 // ===== 求职 =====
@@ -2044,6 +2073,8 @@ function bindEvents() {
   bind('aiCase', () => aiGenerate('case'));
   bind('aiTrend', () => aiGenerate('trend'));
   bind('aiAI', () => aiGenerate('ai'));
+  bind('aiEnt', () => aiGenerate('ent'));
+  bind('addEnt', () => openEntForm());
   bind('addJob', () => openJobForm());
   bind('addResume', () => openResumeForm());
   bind('addFeishu', () => openFeishuForm());
@@ -2119,7 +2150,7 @@ function bindEvents() {
 
 function handleDelete(section, sub, id) {
   const map = {
-    'career|': { cases: 'cases', trends: 'trends', ai: 'ai_news' },
+    'career|': { cases: 'cases', trends: 'trends', ai: 'ai_news', ent: 'ent' },
     'job|': { apps: 'jobs', resumes: 'resumes' },
     'academic|': { papers: 'papers', tasks: 'tasks', ideas: 'ideas' },
     'life|': { books: 'books', spots: 'spots', essays: 'essays', topics: 'topics' }
@@ -2136,7 +2167,7 @@ function handleDelete(section, sub, id) {
 
 function handleEdit(section, sub, id) {
   const map = {
-    'career|cases': openCaseForm, 'career|trends': openTrendForm, 'career|ai': openAIForm,
+    'career|cases': openCaseForm, 'career|trends': openTrendForm, 'career|ai': openAIForm, 'career|ent': openEntForm,
     'job|apps': openJobForm, 'job|resumes': openResumeForm,
     'academic|papers': openPaperForm, 'academic|tasks': openTaskForm, 'academic|ideas': openIdeaForm,
     'life|books': openBookForm, 'life|spots': openSpotForm, 'life|essays': openEssayForm, 'life|topics': openTopicForm
@@ -2214,6 +2245,30 @@ function openAIForm(id) {
     const arr = STORAGE.get('ai_news', []);
     if (id) { const i = arr.findIndex(x => x.id === id); if (i >= 0) arr[i] = obj; } else arr.unshift(obj);
     STORAGE.set('ai_news', arr);
+    toast('已保存', 'success'); closeModal(); render();
+  };
+}
+
+function openEntForm(id) {
+  const item = id ? STORAGE.get('ent', []).find(x => x.id === id) : null;
+  const d = item || { date: today() };
+  const html = makeModal(id ? '编辑文娱案例' : '新增文娱案例', `
+    <div class="form-row form-row-inline"><div><label class="form-label">主体/平台名 *</label><input class="form-input" id="f_brand" value="${escapeHtml(d.brand || '')}" placeholder="如：大麦网/爱奇艺/泡泡玛特/米哈游"></div><div><label class="form-label">细分行业</label><input class="form-input" id="f_industry" value="${escapeHtml(d.industry || '')}" placeholder="演出市场/电视剧/电影/互联网娱乐/网络娱乐"></div></div>
+    <div class="form-row"><label class="form-label">案例标题 *</label><input class="form-input" id="f_title" value="${escapeHtml(d.title || '')}"></div>
+    <div class="form-row"><label class="form-label">当前阶段</label>${stageInputHtml('f_currentStage', d.currentStage, 'ent')}</div>
+    <div class="form-row"><label class="form-label">成功策略</label><textarea class="form-textarea" id="f_strategy">${escapeHtml(d.strategy || '')}</textarea></div>
+    <div class="form-row"><label class="form-label">渠道/平台</label><textarea class="form-textarea" id="f_channel">${escapeHtml(d.channel || '')}</textarea></div>
+    <div class="form-row"><label class="form-label">成效</label><textarea class="form-textarea" id="f_effect">${escapeHtml(d.effect || '')}</textarea></div>
+    <div class="form-row"><label class="form-label">学习要点</label><textarea class="form-textarea" id="f_note">${escapeHtml(d.note || '')}</textarea></div>
+    <div class="form-row form-row-inline"><div><label class="form-label">日期</label><input class="form-input" type="date" id="f_date" value="${d.date || today()}"></div><div><label class="form-label">标签（逗号分隔）</label><input class="form-input" id="f_tags" value="${escapeHtml(d.tags || '')}"></div></div>
+    <div class="form-actions"><button class="btn btn-primary" id="saveBtn">保存</button><button class="btn btn-ghost" onclick="closeModal()">取消</button></div>`);
+  openModal(html);
+  $('#saveBtn').onclick = () => {
+    const obj = { id: id || uid(), brand: $('#f_brand').value.trim(), industry: $('#f_industry').value.trim(), title: $('#f_title').value.trim(), currentStage: $('#f_currentStage').value.trim(), strategy: $('#f_strategy').value.trim(), channel: $('#f_channel').value.trim(), effect: $('#f_effect').value.trim(), note: $('#f_note').value.trim(), date: $('#f_date').value || today(), tags: $('#f_tags').value.trim() };
+    if (!obj.brand || !obj.title) { toast('请填写主体和标题', 'error'); return; }
+    const arr = STORAGE.get('ent', []);
+    if (id) { const i = arr.findIndex(x => x.id === id); if (i >= 0) arr[i] = obj; } else arr.unshift(obj);
+    STORAGE.set('ent', arr);
     toast('已保存', 'success'); closeModal(); render();
   };
 }
@@ -2830,6 +2885,79 @@ async function aiGenerate(type, defaultValue) {
 请直接输出，不要寒暄。`;
       }
     },
+    ent: {
+      label: '文娱行业学习',
+      placeholder: '可输入任意关键词：平台名（爱奇艺/大麦网/泡泡玛特/米哈游）、具体行业（演出市场/电视剧/电影/网络文学）、或方向组合（国风音乐营销）。留空则 AI 自选 2 个不同细分领域',
+      tags: [
+        { label: '中国演出市场', value: '2025-2026 中国演出市场（演唱会/音乐节/话剧/戏曲/Livehouse）现状与成功营销案例' },
+        { label: '电视剧市场', value: '2025-2026 中国电视剧市场 现状与爆款剧成功案例' },
+        { label: '电影市场', value: '2025-2026 中国电影市场 现状与票房/口碑成功案例' },
+        { label: '互联网娱乐产业', value: '2025-2026 中国互联网娱乐产业（短视频/长视频/直播）现状与平台成功案例' },
+        { label: '网络娱乐行业', value: '2025-2026 中国网络娱乐行业（网文/动漫/游戏/IP衍生）现状与成功案例' }
+      ],
+      prompt: (input) => {
+        if (input) {
+          return `请基于你所知的信息，分析与以下关键词相关的中国文娱行业成功案例：
+
+关键词：${input}
+
+分析要求（给 AI 最大自由度）：
+1. 如果你了解这个案例的真实情况 → 基于真实信息详细拆解
+2. 如果你了解该平台/行业但不了解这个具体案例 → 基于其特点、行业趋势和常见打法分析推测（标注"推测"）
+3. 如果你完全不了解 → 请说明，并推荐该平台或同行业类似的优秀案例
+4. 不要因为不确定就返回空内容，务必给出有价值的分析
+5. 聚焦 2025-2026 年，优先最新、近期、真实可查的内容
+
+输出内容请包含以下信息（格式不限，用【方括号】或冒号：或自然段落均可）：
+- 主体/平台名和所属细分行业（如：演出市场/电视剧/电影/互联网娱乐/网络娱乐）
+- 案例标题/活动/作品名
+- 成功策略（核心打法 2-3 点）
+- 传播渠道/平台
+- 成效数据/影响（如有数据，没有就写"暂无具体数据"）
+- 值得学习的要点
+
+同时再提供 1 条不同细分领域/方向的对照案例（同样格式）。
+
+2 条案例之间用一行 "=====案例2=====" 分隔。
+
+请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容。`;
+        }
+        return `请拆解 2 个不同细分领域的中国文娱行业成功案例。领域限定在：演出市场（演唱会/音乐节/话剧/戏曲/Livehouse）、电视剧市场、电影市场、互联网娱乐产业（短视频/长视频/直播）、网络娱乐行业（网文/动漫/游戏/IP衍生）中选 2 个不同的。
+要求：
+1. 案例必须是 2025-2026 年最新、近期的真实事件，越新越好
+2. 严格按以下格式输出 2 条案例，案例之间用一行 "=====案例2=====" 分隔：
+
+【案例 1】
+【主体】平台/公司/作品名
+【行业】细分行业
+【标题】案例标题
+【策略】
+（核心策略 2-3 点）
+【渠道】
+（传播渠道/平台 2-3 点）
+【成效】
+（效果数据/影响 2-3 点）
+【学习要点】
+（值得学习的 1-2 点）
+
+=====案例2=====
+
+【案例 2】
+【主体】平台/公司/作品名
+【行业】细分行业
+【标题】案例标题
+【策略】
+（核心策略）
+【渠道】
+（渠道）
+【成效】
+（效果）
+【学习要点】
+（学习要点）
+
+请直接输出，不要寒暄。`;
+      }
+    },
     topic: {
       label: '小红书艺术议题',
       placeholder: '可选：方向（艺术史研究/艺术推荐/艺术介绍/艺术与AI/审美积累）',
@@ -2929,7 +3057,7 @@ ${input ? `补充要求：${input}` : ''}
 
   const cfg = prompts[type];
   let input;
-  if (type === 'ai') {
+  if (type === 'ai' || type === 'ent') {
     input = await openAIInputModal(cfg, defaultValue || '');
     if (input === null) return;
   } else {
@@ -3060,6 +3188,71 @@ function parseAndSave(type, content, input) {
       console.log(content);
     } else {
       toast(`✅ 已生成并保存 ${saved.length} 条品牌案例`, 'success');
+    }
+    if (currentSection === 'career') render();
+  } else if (type === 'ent') {
+    let parts = content.split(/=====\s*案例\s*2\s*=====/i);
+    if (parts.length === 1) parts = content.split(/【案例\s*2】/i);
+    if (parts.length === 1) parts = content.split(/案例\s*2\s*[：:\n]/i);
+    const saved = [];
+    parts.forEach((part) => {
+      part = part.trim();
+      if (!part) return;
+      let s = extractSections(part, ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点']);
+      if (!s['品牌'] && !s['标题']) {
+        const keys = ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点'];
+        const aliases = {
+          '品牌': ['品牌', '品牌名', '品牌名称', '主体', '平台', '公司', '作品', '作品名'],
+          '行业': ['行业', '所属行业', '领域', '细分行业'],
+          '标题': ['标题', '案例标题', '活动名称', '活动名', '作品名'],
+          '策略': ['策略', '营销策略', '核心打法', '核心策略'],
+          '渠道': ['渠道', '传播渠道', '传播路径', '平台'],
+          '活动效果': ['活动效果', '效果', '效果数据', '成效'],
+          '学习要点': ['学习要点', '要点', '值得学习']
+        };
+        const aliasRe = (k) => new RegExp(aliases[k].map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'));
+        const pattern = /(\S+?)\s*[：:]\s*([\s\S]+?)(?=\S{1,20}\s*[：:]|$)/g;
+        let m;
+        while ((m = pattern.exec(part)) !== null) {
+          const segKey = m[1].trim();
+          const segVal = m[2].trim();
+          if (!segKey || !segVal) continue;
+          for (const k of keys) {
+            if (aliasRe(k).test(segKey) && !s[k]) { s[k] = segVal; break; }
+          }
+        }
+      }
+      if (!s['品牌'] && !s['标题']) {
+        const firstLine = part.split('\n').find(l => l.trim() && !l.includes('案例') && !l.includes('===')) || '';
+        s['标题'] = firstLine.trim().slice(0, 50) || 'AI 生成文娱案例';
+        s['策略'] = part.slice(0, 500);
+      }
+      const obj = {
+        id: uid(),
+        brand: (s['品牌'] || '').trim(),
+        industry: (s['行业'] || '').trim(),
+        title: (s['标题'] || '').trim(),
+        strategy: (s['策略'] || '').trim(),
+        channel: (s['渠道'] || '').trim(),
+        effect: (s['活动效果'] || '').trim(),
+        note: (s['学习要点'] || '').trim(),
+        date: today(),
+        currentStage: '观察中',
+        tags: ''
+      };
+      if (obj.brand || obj.title) {
+        const arr = STORAGE.get('ent', []);
+        arr.unshift(obj);
+        STORAGE.set('ent', arr);
+        saved.push(obj);
+      }
+    });
+    if (saved.length === 0) {
+      toast('AI 返回了内容但未能解析，请打开控制台(F12)查看', 'error');
+      console.log('=== AI 原始返回 ===');
+      console.log(content);
+    } else {
+      toast(`✅ 已生成并保存 ${saved.length} 条文娱案例`, 'success');
     }
     if (currentSection === 'career') render();
   } else if (type === 'trend') {
