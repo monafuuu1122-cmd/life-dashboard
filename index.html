@@ -3030,9 +3030,20 @@ function openAIReviewModal(items, type, onConfirm) {
     { key: 'channel', label: '渠道/平台', required: false, textarea: true },
     { key: 'effect', label: '成效', required: false, textarea: true },
     { key: 'note', label: '学习要点', required: false, textarea: true }
+  ] : type === 'case' ? [
+    { key: 'brand', label: '品牌名 *', required: true },
+    { key: 'industry', label: '行业', required: false },
+    { key: 'title', label: '案例标题 *', required: true, hint: '建议包含品牌 + 案例/活动名' },
+    { key: 'strategy', label: '策略', required: true, textarea: true },
+    { key: 'channel', label: '渠道', required: true, textarea: true },
+    { key: 'effect', label: '活动效果', required: true, textarea: true },
+    { key: 'note', label: '学习要点', required: false, textarea: true }
   ] : [];
+  const hintText = type === 'ent'
+    ? '请检查以下内容是否完整、相关。标 * 为必填，标题建议包含「主体/平台 + 作品名」。策略/渠道/成效不能为空。'
+    : '请检查以下内容是否完整、相关。标 * 为必填，标题建议包含「品牌 + 案例/活动名」。策略、渠道、活动效果必须按逻辑完整填写。';
   let html = `<div class="modal-mask"><div class="modal modal-review"><div class="modal-header"><div class="modal-title">审核 AI 生成结果</div></div><div class="modal-review-body">`;
-  html += `<div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin: 16px 0; font-size: 13px; color: var(--blue-dark);">请检查以下内容是否完整、相关。标 * 为必填，标题建议包含「主体/平台 + 作品/案例名」。点击下方按钮可展开查看原始 AI 输出。</div>`;
+  html += `<div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin: 16px 0; font-size: 13px; color: var(--blue-dark);">${hintText} 点击下方按钮可展开查看原始 AI 输出。</div>`;
   html += `<details style="margin-bottom: 16px;"><summary style="font-size: 13px; color: var(--text-light); cursor: pointer;">查看原始 AI 输出（用于核对）</summary><pre style="margin-top: 8px; background: var(--bg); padding: 12px; border-radius: 10px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow-y: auto;">${escapeHtml(window.__lastAIGeneratedRaw || '(未记录)')}</pre></details>`;
   items.forEach((item, idx) => {
     html += `<div class="ai-review-card" style="background: var(--bg); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 14px; border: 1px solid var(--border);" data-idx="${idx}">`;
@@ -3087,37 +3098,25 @@ function getExistingList(type) {
 function buildDedupHint(typeName, existing) {
   if (!existing || !existing.trim()) return '';
   const count = existing.split('\n').filter(Boolean).length;
-  return `\n\n【去重要求（必须先执行）】
-在生成前，请先审查以下【已有的${typeName}清单】（共 ${count} 条），确保新推荐与已有条目不重复：
-- 同一平台 / 品牌 / 作品 / 方向若已在清单中，请改为提供该主体的【更新案例】或【不同角度 / 不同作品】分析来补充，不要因此完全不输出
-- 优先推荐清单尚未覆盖的平台、作品、行业或方向
-- 目标是补充新内容，而非整体跳过生成；即使与已有条目相关，也应产出一条新的、不重复的分析
-
-已有清单：
-${existing}`;
+  return `在推荐新${typeName}前，请快速浏览已有的 ${count} 条记录，避免推荐完全相同的品牌/作品/方向。若已有相近条目，请换一个新角度、新案例或新平台来补充。不要因此跳过不输出。已有记录如下：\n${existing}`;
 }
 
-// ===== 内容兜底提取：从 AI 响应 JSON 里找到任何可能的正文 =====
+// ===== 内容兜底提取：从 AI 响应 JSON 里找到正文 =====
 function extractAIContent(data) {
   if (!data || typeof data !== 'object') return '';
-  // 优先级 1：OpenAI 标准的 message.content
   const msg = data.choices?.[0]?.message || {};
   if (typeof msg.content === 'string' && msg.content.trim()) return msg.content.trim();
   if (Array.isArray(msg.content)) {
     const s = msg.content.map(c => typeof c === 'string' ? c : (c && c.text) || '').join('').trim();
     if (s) return s;
   }
-  // 优先级 2：推理模型 reasoning_content（DeepSeek / GLM / 国产推理流）
-  if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim()) return msg.reasoning_content.trim();
-  // 优先级 3：老式 completion text
   if (typeof data.choices?.[0]?.text === 'string' && data.choices[0].text.trim()) return data.choices[0].text.trim();
-  // 优先级 4：顶层常见字段（部分代理用 result / output / data 包装）
   for (const k of ['content', 'text', 'message', 'result', 'output', 'answer', 'data', 'response']) {
     if (typeof data[k] === 'string' && data[k].trim().length > 20) return data[k].trim();
   }
-  // 优先级 5：深度扫描——找最长的字符串字段（排除元数据 key）
+  // 深度扫描（排除元数据 key 和已被排除的 reasoning_content）
   let best = '';
-  const skipKeys = new Set(['id', 'model', 'object', 'role', 'created', 'finish_reason', 'finish_reason', 'usage', 'error', 'error_type', 'error_code', 'index', 'logprobs', 'system_fingerprint']);
+  const skipKeys = new Set(['id', 'model', 'object', 'role', 'created', 'finish_reason', 'usage', 'error', 'error_type', 'error_code', 'index', 'logprobs', 'system_fingerprint', 'reasoning_content']);
   function walk(obj, depth) {
     if (depth > 8 || !obj || typeof obj !== 'object') return;
     if (Array.isArray(obj)) { obj.forEach(v => walk(v, depth + 1)); return; }
@@ -3136,6 +3135,12 @@ function extractAIContent(data) {
   return best;
 }
 
+function looksLikePromptEcho(text) {
+  if (!text || typeof text !== 'string') return true;
+  const markers = ['去重要求','先审查已有清单','已有清单','【去重要求','在生成前，请先审查','确保新推荐','目标是补充新内容','同一平台 / 品牌','请快速浏览已有的','避免推荐完全相同的'];
+  return markers.some(m => text.includes(m));
+}
+
 async function aiGenerate(type, defaultValue) {
   const api = STORAGE.get('api', {});
   if (!api.url || !api.key) {
@@ -3147,32 +3152,55 @@ async function aiGenerate(type, defaultValue) {
     case: {
       label: '品牌案例',
       placeholder: '可输入任意关键词：品牌名（瑞幸）、品牌+案例（瑞幸×茅台 酱香拿铁）、行业+方向（互联网 AI反焦虑营销）。留空则 AI 自选 2 条不同行业',
-      prompt: (input, existing) => {
-        const dedup = buildDedupHint('品牌案例', existing);
+      prompt: (input) => {
         if (input) {
-          return `请基于你所知的信息，分析与以下关键词相关的品牌营销案例：
+          const isIndustry = /互联网|快消|食品|美妆|数码|运动|汽车|金融|文旅|教育|医疗|电商|零售|餐饮|家电|3C/.test(input);
+          const scope = isIndustry
+            ? `请搜索并拆解「${input}行业」内 2 个不同品牌的成功营销案例（2 条案例须来自同一行业内的不同品牌，或 1 条该行业 + 1 条相关对照行业）。`
+            : `请搜索并拆解与「${input}」相关的品牌营销案例（若「${input}」是品牌名，输出该品牌的 1 个代表性案例 + 1 条同行业对照案例；若「${input}」是具体案例/活动，直接拆解该案例 + 1 条同行业对照案例）。`;
+          return `${scope}
 
-关键词：${input}
+拆解逻辑（必须严格执行）：每条案例都必须按"策略 → 渠道 → 活动效果"三段式结构输出：
+- 【策略】核心打法 2-3 点，必须具体、可学习，不能只写"创新营销"
+- 【渠道】传播渠道/平台 2-3 点，说明各渠道承担的作用
+- 【活动效果】效果数据/市场影响（如有数据请给出；没有就写"暂无具体公开数据"，严禁留空）
 
-分析要求（给 AI 最大自由度）：
-1. 如果你了解这个案例的真实情况 → 基于真实信息详细拆解
-2. 如果你了解该品牌但不了解这个具体案例 → 基于该品牌的特点、行业趋势和常见营销模式分析推测（标注"推测"）
-3. 如果你完全不了解 → 请说明，并推荐该品牌或其他品牌类似的营销案例
-4. 不要因为不确定就返回空内容，务必给出有价值的分析
+输出要求：
+1. 若输入是行业关键词，优先输出该行业真实、近期（2024-2026 年）的成功品牌案例
+2. 若不确定具体数据，可标注"推测"，但内容必须完整，不能空着
+3. 案例标题必须包含"品牌名 + 案例/活动名"，例如"美团：七夕节"国家级相亲"social 营销"
+4. 2 条案例之间用一行 "=====案例2=====" 分隔
+5. 严格按以下固定格式输出，禁止用自然段落替代字段：
 
-输出内容请包含以下信息（格式不限，用【方括号】或冒号：或自然段落均可）：
-- 品牌名和所属行业
-- 案例标题/活动名称
-- 营销策略（核心打法 2-3 点）
-- 传播渠道
-- 活动效果（如有数据，没有就写"暂无具体数据"）
-- 值得学习的要点
+【案例 1】
+【品牌】品牌名
+【行业】行业
+【标题】品牌 + 案例/活动名
+【策略】
+（核心策略 2-3 点）
+【渠道】
+（传播渠道 2-3 点）
+【活动效果】
+（效果数据 2-3 点，无数据则写"暂无具体公开数据"）
+【学习要点】
+（值得学习的 1-2 点）
 
-同时再提供 1 条不同行业/方向的对照案例（同样格式，同样基于你的知识自由分析）。
+=====案例2=====
 
-2 条案例之间用一行 "=====案例2=====" 分隔。
+【案例 2】
+【品牌】品牌名
+【行业】行业
+【标题】品牌 + 案例/活动名
+【策略】
+（核心策略 2-3 点）
+【渠道】
+（传播渠道 2-3 点）
+【活动效果】
+（效果数据 2-3 点，无数据则写"暂无具体公开数据"）
+【学习要点】
+（值得学习的 1-2 点）
 
-请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容。${dedup}`;
+请直接输出，不要寒暄，不要只回复"不了解"，必须输出完整结构。`;
         }
         return `请拆解 2 个不同行业的最新、最近的品牌营销案例。行业限定在：快消、食品、美妆、互联网、数码产品、运动品牌 中选 2 个不同的。
 要求：
@@ -3207,13 +3235,13 @@ async function aiGenerate(type, defaultValue) {
 【学习要点】
 （学习要点）
 
-请直接输出，不要寒暄。${dedup}`;
+请直接输出，不要寒暄。`;
       }
     },
     trend: {
       label: '2 条不同行业的趋势分析',
       placeholder: '可选：行业关键词（留空让 AI 选互联网+快消）',
-      prompt: (input, existing) => `请提供 2 条不同行业的最新、近期的趋势分析报告。${input ? `第一条与【${input}】相关，第二条选另一个不同行业` : '第一条选互联网行业，第二条选快消行业'}。
+      prompt: (input) => `请提供 2 条不同行业的最新、近期的趋势分析报告。${input ? `第一条与【${input}】相关，第二条选另一个不同行业` : '第一条选互联网行业，第二条选快消行业'}。
 要求：
 1. 引用最新、近期的专业分析机构（麦肯锡、波士顿咨询、艾瑞、QuestMobile、CBNData 等）观点，优先 2025-2026 年的报告
 2. 重点关注中国市场，兼顾海外动向
@@ -3234,7 +3262,7 @@ async function aiGenerate(type, defaultValue) {
 【趋势 2】
 （同上格式）
 
-请直接输出。${buildDedupHint('行业趋势', existing)}`
+请直接输出。`
     },
     ai: {
       label: '今日 AI 行业动态',
@@ -3247,8 +3275,7 @@ async function aiGenerate(type, defaultValue) {
         { label: 'AI 文化', value: 'AI 原生内容、AI 影视/音乐/艺术、大众文化现象与社交媒体讨论' },
         { label: '社媒趋势', value: 'Reddit / X / 小红书 / 知乎 上的 AI 讨论热点与用户反馈' }
       ],
-      prompt: (input, existing) => {
-        const dedupAi = buildDedupHint('AI 行业动态', existing);
+      prompt: (input) => {
         const isMarketing = /品牌营销|营销|品牌|文化|公关|传播/.test(input || '');
         const direction = isMarketing
           ? '海内外互联网行业 2025 至今的 AI 模型公司或互联网公司自身的品牌营销案例与 AI 文化现象，严禁涉及"AI 工具如何赋能第三方品牌营销"。重点关注：OpenAI、Anthropic、xAI、Google DeepMind、Meta AI、字节跳动豆包、阿里通义、百度文心、腾讯混元、智谱、月之暗面 Kimi、DeepSeek 等 AI 公司的产品发布会营销、AI 大会营销、品牌短片、AI 文化现象级传播、创始人公关叙事等真实或高度可推测案例。'
@@ -3276,7 +3303,7 @@ async function aiGenerate(type, defaultValue) {
 【链接关键词】
 （搜索关键词）
 
-请直接输出，不要寒暄。${dedupAi}`;
+请直接输出，不要寒暄。`;
       }
     },
     ent: {
@@ -3289,8 +3316,7 @@ async function aiGenerate(type, defaultValue) {
         { label: '互联网娱乐产业', value: '2025-2026 中国互联网娱乐产业（短视频/长视频/直播）现状与平台成功案例' },
         { label: '网络娱乐行业', value: '2025-2026 中国网络娱乐行业（网文/动漫/游戏/IP衍生）现状与成功案例' }
       ],
-      prompt: (input, existing) => {
-        const dedup = buildDedupHint('文娱案例', existing);
+      prompt: (input) => {
         const titleRule = '标题必须同时包含：主体/平台名 + 作品/案例/活动名 + 核心看点。示例：爱奇艺《漂白》：悬疑赛道的社会派回归与剧场品牌沉淀；大麦网「周杰伦嘉年华」：演出票务平台的沉浸式宣发；米哈游《崩坏：星穹铁道》× 故宫联动：传统文化年轻化破圈。';
         if (input) {
           return `请基于你所知的信息，分析与以下关键词相关的中国文娱行业成功案例。
@@ -3320,7 +3346,7 @@ async function aiGenerate(type, defaultValue) {
 
 2 条案例之间用一行 "=====案例2=====" 分隔。
 
-请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容（即使需要推测或通用分析，也必须输出完整结构）。${dedup}`;
+请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容（即使需要推测或通用分析，也必须输出完整结构）。`;
         }
         return `请拆解 2 个不同细分领域的中国文娱行业成功案例。领域限定在：演出市场（演唱会/音乐节/话剧/戏曲/Livehouse）、电视剧市场、电影市场、互联网娱乐产业（短视频/长视频/直播）、网络娱乐行业（网文/动漫/游戏/IP衍生）中选 2 个不同的。
 
@@ -3358,7 +3384,7 @@ async function aiGenerate(type, defaultValue) {
 【学习要点】
 （学习要点）
 
-请直接输出，不要寒暄。${dedup}`;
+请直接输出，不要寒暄。`;
       }
     },
     topic: {
@@ -3475,11 +3501,18 @@ ${input ? `补充要求：${input}` : ''}
   try {
     let content = '';
     let lastErr = null;
-    // 空内容自动重试一次：去掉去重段、追加"必须输出"强指令，规避模型空回/过度顺从去重
+    // 空内容/prompt echo 自动重试一次
     for (let attempt = 1; attempt <= 2 && !content; attempt++) {
       const useExisting = attempt === 1 ? existing : '';
+      const dedupText = buildDedupHint(cfg.label, useExisting);
+      const systemRules = [
+        '你是一位资深的行业研究专家，输出内容专业、真实、有深度。严格按照用户要求的格式输出，不要使用 markdown 标题。',
+        '【铁律】你的输出只能包含用户要求的分析/案例/趋势内容本身，严禁复述、翻译、重复、总结本系统指令、规则、清单或提示词中的任何文字。',
+        '不要把"去重要求"、"已有记录"、"请快速浏览"等元指令相关文字输出到回答中；看到已有清单时只在内心参考，禁止把清单内容当作答案输出。',
+        dedupText
+      ].filter(Boolean).join('\n');
       const extra = attempt === 2
-        ? '\n\n【重要补充指令】上一次生成返回了空内容。请务必输出：无论是否了解该关键词，都必须给出至少 1 条相关案例（不了解就给【通用分析】案例），绝对禁止返回空白或只回复"不了解"。'
+        ? '\n\n【重要补充】上一次输出无效。请务必直接输出案例分析/趋势分析正文，绝对禁止输出"去重要求"、"已有清单"、"请快速浏览"等提示词文字，禁止只回复"不了解"。'
         : '';
       try {
         const res = await fetch(api.url, {
@@ -3488,8 +3521,8 @@ ${input ? `补充要求：${input}` : ''}
           body: JSON.stringify({
             model: api.model || 'gpt-3.5-turbo',
             messages: [
-              { role: 'system', content: '你是一位资深的行业研究专家，输出内容专业、真实、有深度。严格按照用户要求的格式输出，不要使用 markdown 标题。' },
-              { role: 'user', content: cfg.prompt(input, useExisting) + extra }
+              { role: 'system', content: systemRules },
+              { role: 'user', content: cfg.prompt(input) + extra }
             ],
             temperature: 0.7,
             max_tokens: 4096
@@ -3498,21 +3531,25 @@ ${input ? `补充要求：${input}` : ''}
         if (!res.ok) { const t = await res.text(); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 200)); }
         const data = await res.json();
         if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).slice(0, 200));
-        // 多级兜底：扫遍整个响应 JSON 找正文
         content = extractAIContent(data);
+        // 检测模型是否把提示词/去重要求 echo 回用户
+        if (content && looksLikePromptEcho(content)) {
+          console.log(`第 ${attempt} 次生成疑似 prompt echo，长度 ${content.length}，视为无效并重试`);
+          console.log('echo 片段：', content.slice(0, 300));
+          content = '';
+        }
         if (content) break;
-        // 空响应时打完整字段诊断，方便定位是哪个字段缺失
-        console.log(`第 ${attempt} 次生成返回空，尝试重试…`);
+        console.log(`第 ${attempt} 次生成返回空或无效，尝试重试…`);
         try { console.log('=== AI 完整原始响应（请把这段截图给开发者）===\n', JSON.stringify(data, null, 2)); } catch (e) { console.log('data:', data); }
-        console.log('字段诊断：message.content=', data.choices?.[0]?.message?.content, '| message.reasoning_content=', data.choices?.[0]?.message?.reasoning_content, '| 顶层 keys=', Object.keys(data).join(','));
-        if (attempt === 1) toast('首次生成内容为空，正在用简化指令重试…', 'warn');
+        console.log('字段诊断：message.content=', data.choices?.[0]?.message?.content, '| 顶层 keys=', Object.keys(data).join(','));
+        if (attempt === 1) toast('首次生成内容为空/无效，正在用简化指令重试…', 'warn');
       } catch (e) {
         lastErr = e;
-        break; // 真实错误（HTTP/JSON/余额）直接跳出，交给外层统一处理
+        break;
       }
     }
     if (!content) {
-      const msg = lastErr ? (lastErr.message || String(lastErr)) : 'AI 两次都返回了空响应（已尝试 content / reasoning_content / text / 顶层字段 / 整树扫描）。当前模型：' + (api.model || '默认') + '。请打开浏览器控制台（F12）把那段『AI 完整原始响应』截图发我，我据此适配你的代理返回结构。';
+      const msg = lastErr ? (lastErr.message || String(lastErr)) : 'AI 两次都返回了空响应（已尝试 content / text / 顶层字段 / 整树扫描）。当前模型：' + (api.model || '默认') + '。请打开浏览器控制台（F12）把那段『AI 完整原始响应』截图发我，我据此适配你的代理返回结构。';
       console.log('AI 生成最终失败：', msg);
       throw new Error(msg);
     }
@@ -3550,8 +3587,9 @@ function parseAndSave(type, content, input) {
     let parts = content.split(/=====\s*案例\s*2\s*=====/i);
     if (parts.length === 1) parts = content.split(/【案例\s*2】/i);
     if (parts.length === 1) parts = content.split(/案例\s*2\s*[：:\n]/i);
-    const saved = [];
-    parts.forEach((part, idx) => {
+    const parsed = [];
+    const placeholderRe = /^(（[^（）]*?）|\([^()]*?\)|核心策略|传播渠道|效果数据|值得学习|暂无数据|请填写|示例|模板)$/;
+    parts.forEach((part) => {
       part = part.trim();
       if (!part) return;
       let s = extractSections(part, ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点']);
@@ -3568,22 +3606,36 @@ function parseAndSave(type, content, input) {
           '学习要点': ['学习要点', '要点', '值得学习']
         };
         const aliasRe = (k) => new RegExp(aliases[k].map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'));
-        // 用全局匹配每个"标签：内容"对（避免 split 后段首冒号问题）
-        const pattern = /(\S+?)\s*[：:]\s*([\s\S]+?)(?=\S{1,20}\s*[：:]|$)/g;
+        // 先尝试匹配 【key】 内容（不含下一个【key】）
+        const bracketPattern = /【(\S+?)】([\s\S]+?)(?=【\S+?】|$)/g;
         let m;
-        while ((m = pattern.exec(part)) !== null) {
+        while ((m = bracketPattern.exec(part)) !== null) {
           const segKey = m[1].trim();
           const segVal = m[2].trim();
           if (!segKey || !segVal) continue;
           for (const k of keys) {
-            if (aliasRe(k).test(segKey) && !s[k]) {
-              s[k] = segVal;
-              break;
+            if (aliasRe(k).test(segKey) && !s[k]) { s[k] = segVal; break; }
+          }
+        }
+        // 再尝试 key: value / key：value
+        if (!s['品牌'] && !s['标题']) {
+          const colonPattern = /(\S+?)\s*[：:]\s*([\s\S]+?)(?=\S{1,20}\s*[：:]|$)/g;
+          while ((m = colonPattern.exec(part)) !== null) {
+            const segKey = m[1].trim();
+            const segVal = m[2].trim();
+            if (!segKey || !segVal) continue;
+            for (const k of keys) {
+              if (aliasRe(k).test(segKey) && !s[k]) { s[k] = segVal; break; }
             }
           }
         }
       }
-      // 容错 2：还提取不到，把整个内容作为一条记录
+      // 清洗：去掉模板占位文字（如"（核心策略 2-3 点）"）
+      Object.keys(s).forEach(k => {
+        const v = s[k].trim();
+        if (placeholderRe.test(v) || v.replace(/[（）()\s]/g, '').length < 4) s[k] = '';
+      });
+      // 容错 2：还提取不到标题/品牌，把整个内容作为一条记录
       if (!s['品牌'] && !s['标题']) {
         const firstLine = part.split('\n').find(l => l.trim() && !l.includes('案例') && !l.includes('===')) || '';
         s['标题'] = firstLine.trim().slice(0, 50) || 'AI 生成案例';
@@ -3602,21 +3654,23 @@ function parseAndSave(type, content, input) {
         currentStage: '学习中',
         tags: ''
       };
-      if (obj.brand || obj.title) {
-        const arr = STORAGE.get('cases', []);
-        arr.unshift(obj);
-        STORAGE.set('cases', arr);
-        saved.push(obj);
-      }
+      if (obj.brand || obj.title) parsed.push(obj);
     });
-    if (saved.length === 0) {
+    if (parsed.length === 0) {
       toast('AI 返回了内容但未能解析，请打开控制台(F12)查看', 'error');
       console.log('=== AI 原始返回 ===');
       console.log(content);
+      if (currentSection === 'career') render();
     } else {
-      toast(`✅ 已生成并保存 ${saved.length} 条品牌案例`, 'success');
+      openAIReviewModal(parsed, 'case', (confirmed) => {
+        if (!confirmed || confirmed.length === 0) { toast('已取消保存', 'warn'); return; }
+        const arr = STORAGE.get('cases', []);
+        confirmed.forEach(obj => arr.unshift(obj));
+        STORAGE.set('cases', arr);
+        toast(`✅ 已保存 ${confirmed.length} 条品牌案例`, 'success');
+        if (currentSection === 'career') render();
+      });
     }
-    if (currentSection === 'career') render();
   } else if (type === 'ent') {
     let parts = content.split(/=====\s*案例\s*2\s*=====/i);
     if (parts.length === 1) parts = content.split(/【案例\s*2】/i);
