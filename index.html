@@ -350,6 +350,14 @@ input, textarea, select { font-family: inherit; font-size: 16px; color: var(--te
   animation: slideUp 0.3s;
 }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-review { display: flex; flex-direction: column; padding: 0; overflow: hidden; max-width: 720px; }
+.modal-review .modal-header { padding: 20px 24px 0; margin-bottom: 8px; border-bottom: none; position: static; }
+.modal-review .modal-review-body { flex: 1; overflow-y: auto; padding: 0 24px 20px; }
+.modal-review .modal-review-footer { padding: 14px 24px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+@media (max-width: 768px) {
+  .modal-review { max-height: 95vh; }
+  .modal-review .modal-review-body { max-height: 70vh; }
+}
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -403,6 +411,10 @@ input, textarea, select { font-family: inherit; font-size: 16px; color: var(--te
 .case-section { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
 .case-section-title { font-size: 12px; font-weight: 700; color: var(--blue-dark); margin-bottom: 6px; letter-spacing: 1px; }
 .case-section-content { font-size: 14px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+
+/* 文娱案例卡片：取消高度限制，完整展示 */
+.case-card.ent-card { max-height: none; overflow: visible; border-left-color: #C9A86C; }
+.ent-card-title { font-size: 17px; font-weight: 700; line-height: 1.5; }
 
 /* ========== 特殊：求职进度 ========== */
 .job-table { background: var(--card); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
@@ -1241,9 +1253,9 @@ function renderEnt() {
   if (list.length === 0) {
     html += `<div class="list-empty"><div class="list-empty-icon">🎭</div>还没有文娱案例，点击上方按钮添加或 AI 搜索</div>`;
   } else {
-    html += list.map(c => `<div class="case-card" data-id="${c.id}">
+    html += list.map(c => `<div class="case-card ent-card" data-id="${c.id}">
       <div class="case-brand">${escapeHtml(c.brand)} · ${escapeHtml(c.industry || '')}</div>
-      <div class="card-title">${escapeHtml(c.title)}</div>
+      <div class="card-title ent-card-title">${escapeHtml(c.title)}</div>
       <div class="card-meta"><span class="tag cream">📅 ${c.date}</span>${stageTagHtml(c.currentStage)}${c.tags ? c.tags.split(',').map(t => `<span class="tag">${escapeHtml(t.trim())}</span>`).join('') : ''}</div>
       <div class="case-section"><div class="case-section-title">▎成功策略</div><div class="case-section-content">${escapeHtml(c.strategy || '')}</div></div>
       <div class="case-section"><div class="case-section-title">▎渠道/平台</div><div class="case-section-content">${escapeHtml(c.channel || '')}</div></div>
@@ -2744,6 +2756,122 @@ function openAIInputModal(cfg, defaultValue) {
   });
 }
 
+// AI 生成结果审核弹窗（目前用于文娱案例）
+function openAIReviewModal(items, type, onConfirm) {
+  const fields = type === 'ent' ? [
+    { key: 'brand', label: '主体/平台名', required: true },
+    { key: 'industry', label: '细分行业', required: true },
+    { key: 'title', label: '案例标题', required: true, hint: '需包含主体/平台 + 作品名' },
+    { key: 'strategy', label: '成功策略', required: false, textarea: true },
+    { key: 'channel', label: '渠道/平台', required: false, textarea: true },
+    { key: 'effect', label: '成效', required: false, textarea: true },
+    { key: 'note', label: '学习要点', required: false, textarea: true }
+  ] : [];
+  let html = `<div class="modal-mask"><div class="modal modal-review"><div class="modal-header"><div class="modal-title">审核 AI 生成结果</div></div><div class="modal-review-body">`;
+  html += `<div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin: 16px 0; font-size: 13px; color: var(--blue-dark);">请检查以下内容是否完整、相关。标 * 为必填，标题建议包含「主体/平台 + 作品/案例名」。点击下方按钮可展开查看原始 AI 输出。</div>`;
+  html += `<details style="margin-bottom: 16px;"><summary style="font-size: 13px; color: var(--text-light); cursor: pointer;">查看原始 AI 输出（用于核对）</summary><pre style="margin-top: 8px; background: var(--bg); padding: 12px; border-radius: 10px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow-y: auto;">${escapeHtml(window.__lastAIGeneratedRaw || '(未记录)')}</pre></details>`;
+  items.forEach((item, idx) => {
+    html += `<div class="ai-review-card" style="background: var(--bg); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 14px; border: 1px solid var(--border);" data-idx="${idx}">`;
+    html += `<div style="font-weight: 700; font-size: 14px; margin-bottom: 10px; color: var(--blue-dark);">案例 ${idx + 1}</div>`;
+    fields.forEach(f => {
+      const val = item[f.key] || '';
+      const emptyBadge = f.required && !val ? `<span style="color: var(--red); font-size: 12px; margin-left: 6px;">（必填，为空）</span>` : '';
+      if (f.textarea) {
+        html += `<div style="margin-bottom: 10px;"><label class="form-label" style="font-size: 12px;">${f.label}${f.required ? ' *' : ''}${emptyBadge}</label><textarea class="form-textarea ai-review-field" data-key="${f.key}" data-idx="${idx}" rows="3" style="font-size: 13px;">${escapeHtml(val)}</textarea></div>`;
+      } else {
+        html += `<div style="margin-bottom: 10px;"><label class="form-label" style="font-size: 12px;">${f.label}${f.required ? ' *' : ''}${emptyBadge}</label><input class="form-input ai-review-field" data-key="${f.key}" data-idx="${idx}" value="${escapeHtml(val)}" style="font-size: 13px;"></div>`;
+      }
+    });
+    html += `</div>`;
+  });
+  html += `</div><div class="modal-review-footer"><button class="btn btn-ghost" id="aiReviewCancel">取消</button><button class="btn btn-primary" id="aiReviewConfirm">确认保存</button></div></div></div>`;
+  openModal(html);
+  const cancel = document.getElementById('aiReviewCancel');
+  if (cancel) cancel.onclick = () => { closeModal(); if (onConfirm) onConfirm([]); };
+  const confirmBtn = document.getElementById('aiReviewConfirm');
+  if (confirmBtn) confirmBtn.onclick = () => {
+    const result = [];
+    let hasEmptyRequired = false;
+    items.forEach((item, idx) => {
+      const updated = { ...item };
+      fields.forEach(f => {
+        const el = document.querySelector(`.ai-review-field[data-key="${f.key}"][data-idx="${idx}"]`);
+        if (el) updated[f.key] = el.value.trim();
+      });
+      if (updated.brand || updated.title) result.push(updated);
+      fields.forEach(f => { if (f.required && !updated[f.key]) hasEmptyRequired = true; });
+    });
+    if (hasEmptyRequired) {
+      if (!confirm('仍有必填项为空，确定要继续保存吗？')) return;
+    }
+    closeModal();
+    if (onConfirm) onConfirm(result);
+  };
+}
+
+// ===== 去重辅助：收集已有条目并生成去重提示 =====
+function getExistingList(type) {
+  try {
+    if (type === 'case') return STORAGE.get('cases', []).map(c => `品牌「${c.brand || ''}」${c.industry ? '（' + c.industry + '）' : ''}：${c.title || ''}`).filter(l => l.replace(/[品牌「」（）：]/g, '').length > 0).join('\n');
+    if (type === 'trend') return STORAGE.get('trends', []).map(t => `${t.industry || '综合'}：${t.title || ''}`).filter(l => l.replace(/[：]/g, '').length > 0).join('\n');
+    if (type === 'ai') return STORAGE.get('ai_news', []).map(n => `${n.category || ''}：${n.title || ''}`).filter(l => l.replace(/[：]/g, '').length > 0).join('\n');
+    if (type === 'ent') return STORAGE.get('ent', []).map(e => `${e.brand || ''}${e.industry ? '（' + e.industry + '）' : ''}：${e.title || ''}`).filter(l => l.replace(/[（）：]/g, '').length > 0).join('\n');
+  } catch (e) {}
+  return '';
+}
+
+function buildDedupHint(typeName, existing) {
+  if (!existing || !existing.trim()) return '';
+  const count = existing.split('\n').filter(Boolean).length;
+  return `\n\n【去重要求（必须先执行）】
+在生成前，请先审查以下【已有的${typeName}清单】（共 ${count} 条），确保新推荐与已有条目不重复：
+- 同一平台 / 品牌 / 作品 / 方向若已在清单中，请改为提供该主体的【更新案例】或【不同角度 / 不同作品】分析来补充，不要因此完全不输出
+- 优先推荐清单尚未覆盖的平台、作品、行业或方向
+- 目标是补充新内容，而非整体跳过生成；即使与已有条目相关，也应产出一条新的、不重复的分析
+
+已有清单：
+${existing}`;
+}
+
+// ===== 内容兜底提取：从 AI 响应 JSON 里找到任何可能的正文 =====
+function extractAIContent(data) {
+  if (!data || typeof data !== 'object') return '';
+  // 优先级 1：OpenAI 标准的 message.content
+  const msg = data.choices?.[0]?.message || {};
+  if (typeof msg.content === 'string' && msg.content.trim()) return msg.content.trim();
+  if (Array.isArray(msg.content)) {
+    const s = msg.content.map(c => typeof c === 'string' ? c : (c && c.text) || '').join('').trim();
+    if (s) return s;
+  }
+  // 优先级 2：推理模型 reasoning_content（DeepSeek / GLM / 国产推理流）
+  if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim()) return msg.reasoning_content.trim();
+  // 优先级 3：老式 completion text
+  if (typeof data.choices?.[0]?.text === 'string' && data.choices[0].text.trim()) return data.choices[0].text.trim();
+  // 优先级 4：顶层常见字段（部分代理用 result / output / data 包装）
+  for (const k of ['content', 'text', 'message', 'result', 'output', 'answer', 'data', 'response']) {
+    if (typeof data[k] === 'string' && data[k].trim().length > 20) return data[k].trim();
+  }
+  // 优先级 5：深度扫描——找最长的字符串字段（排除元数据 key）
+  let best = '';
+  const skipKeys = new Set(['id', 'model', 'object', 'role', 'created', 'finish_reason', 'finish_reason', 'usage', 'error', 'error_type', 'error_code', 'index', 'logprobs', 'system_fingerprint']);
+  function walk(obj, depth) {
+    if (depth > 8 || !obj || typeof obj !== 'object') return;
+    if (Array.isArray(obj)) { obj.forEach(v => walk(v, depth + 1)); return; }
+    for (const k in obj) {
+      if (skipKeys.has(k)) continue;
+      const v = obj[k];
+      if (typeof v === 'string') {
+        const t = v.trim();
+        if (t.length > best.length && t.length > 80) best = t;
+      } else if (v && typeof v === 'object') {
+        walk(v, depth + 1);
+      }
+    }
+  }
+  walk(data, 0);
+  return best;
+}
+
 async function aiGenerate(type, defaultValue) {
   const api = STORAGE.get('api', {});
   if (!api.url || !api.key) {
@@ -2755,7 +2883,8 @@ async function aiGenerate(type, defaultValue) {
     case: {
       label: '品牌案例',
       placeholder: '可输入任意关键词：品牌名（瑞幸）、品牌+案例（瑞幸×茅台 酱香拿铁）、行业+方向（互联网 AI反焦虑营销）。留空则 AI 自选 2 条不同行业',
-      prompt: (input) => {
+      prompt: (input, existing) => {
+        const dedup = buildDedupHint('品牌案例', existing);
         if (input) {
           return `请基于你所知的信息，分析与以下关键词相关的品牌营销案例：
 
@@ -2779,7 +2908,7 @@ async function aiGenerate(type, defaultValue) {
 
 2 条案例之间用一行 "=====案例2=====" 分隔。
 
-请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容。`;
+请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容。${dedup}`;
         }
         return `请拆解 2 个不同行业的最新、最近的品牌营销案例。行业限定在：快消、食品、美妆、互联网、数码产品、运动品牌 中选 2 个不同的。
 要求：
@@ -2814,13 +2943,13 @@ async function aiGenerate(type, defaultValue) {
 【学习要点】
 （学习要点）
 
-请直接输出，不要寒暄。`;
+请直接输出，不要寒暄。${dedup}`;
       }
     },
     trend: {
       label: '2 条不同行业的趋势分析',
       placeholder: '可选：行业关键词（留空让 AI 选互联网+快消）',
-      prompt: (input) => `请提供 2 条不同行业的最新、近期的趋势分析报告。${input ? `第一条与【${input}】相关，第二条选另一个不同行业` : '第一条选互联网行业，第二条选快消行业'}。
+      prompt: (input, existing) => `请提供 2 条不同行业的最新、近期的趋势分析报告。${input ? `第一条与【${input}】相关，第二条选另一个不同行业` : '第一条选互联网行业，第二条选快消行业'}。
 要求：
 1. 引用最新、近期的专业分析机构（麦肯锡、波士顿咨询、艾瑞、QuestMobile、CBNData 等）观点，优先 2025-2026 年的报告
 2. 重点关注中国市场，兼顾海外动向
@@ -2841,7 +2970,7 @@ async function aiGenerate(type, defaultValue) {
 【趋势 2】
 （同上格式）
 
-请直接输出。`
+请直接输出。${buildDedupHint('行业趋势', existing)}`
     },
     ai: {
       label: '今日 AI 行业动态',
@@ -2854,7 +2983,8 @@ async function aiGenerate(type, defaultValue) {
         { label: 'AI 文化', value: 'AI 原生内容、AI 影视/音乐/艺术、大众文化现象与社交媒体讨论' },
         { label: '社媒趋势', value: 'Reddit / X / 小红书 / 知乎 上的 AI 讨论热点与用户反馈' }
       ],
-      prompt: (input) => {
+      prompt: (input, existing) => {
+        const dedupAi = buildDedupHint('AI 行业动态', existing);
         const isMarketing = /品牌营销|营销|品牌|文化|公关|传播/.test(input || '');
         const direction = isMarketing
           ? '海内外互联网行业 2025 至今的 AI 模型公司或互联网公司自身的品牌营销案例与 AI 文化现象，严禁涉及"AI 工具如何赋能第三方品牌营销"。重点关注：OpenAI、Anthropic、xAI、Google DeepMind、Meta AI、字节跳动豆包、阿里通义、百度文心、腾讯混元、智谱、月之暗面 Kimi、DeepSeek 等 AI 公司的产品发布会营销、AI 大会营销、品牌短片、AI 文化现象级传播、创始人公关叙事等真实或高度可推测案例。'
@@ -2882,7 +3012,7 @@ async function aiGenerate(type, defaultValue) {
 【链接关键词】
 （搜索关键词）
 
-请直接输出，不要寒暄。`;
+请直接输出，不要寒暄。${dedupAi}`;
       }
     },
     ent: {
@@ -2895,9 +3025,11 @@ async function aiGenerate(type, defaultValue) {
         { label: '互联网娱乐产业', value: '2025-2026 中国互联网娱乐产业（短视频/长视频/直播）现状与平台成功案例' },
         { label: '网络娱乐行业', value: '2025-2026 中国网络娱乐行业（网文/动漫/游戏/IP衍生）现状与成功案例' }
       ],
-      prompt: (input) => {
+      prompt: (input, existing) => {
+        const dedup = buildDedupHint('文娱案例', existing);
+        const titleRule = '标题必须同时包含：主体/平台名 + 作品/案例/活动名 + 核心看点。示例：爱奇艺《漂白》：悬疑赛道的社会派回归与剧场品牌沉淀；大麦网「周杰伦嘉年华」：演出票务平台的沉浸式宣发；米哈游《崩坏：星穹铁道》× 故宫联动：传统文化年轻化破圈。';
         if (input) {
-          return `请基于你所知的信息，分析与以下关键词相关的中国文娱行业成功案例：
+          return `请基于你所知的信息，分析与以下关键词相关的中国文娱行业成功案例。
 
 关键词：${input}
 
@@ -2907,30 +3039,37 @@ async function aiGenerate(type, defaultValue) {
 3. 如果你完全不了解 → 请说明，并推荐该平台或同行业类似的优秀案例
 4. 不要因为不确定就返回空内容，务必给出有价值的分析
 5. 聚焦 2025-2026 年，优先最新、近期、真实可查的内容
+6. ${titleRule}
+7. 每个字段内容必须完整充实，不能只写一句话或留空
+8. 若对该关键词完全不了解，请基于同类平台 / 作品的通用成功打法，自行构造 1 条【通用分析】案例（在标题或策略处标注"通用分析"），严禁输出空白或只回复"不了解"
 
-输出内容请包含以下信息（格式不限，用【方括号】或冒号：或自然段落均可）：
-- 主体/平台名和所属细分行业（如：演出市场/电视剧/电影/互联网娱乐/网络娱乐）
-- 案例标题/活动/作品名
-- 成功策略（核心打法 2-3 点）
-- 传播渠道/平台
-- 成效数据/影响（如有数据，没有就写"暂无具体数据"）
-- 值得学习的要点
+输出内容请严格按以下字段输出（用【方括号】标识）：
+- 【主体】平台/公司/作品名
+- 【行业】所属细分行业（演出市场/电视剧/电影/互联网娱乐/网络娱乐）
+- 【标题】必须包含主体/平台 + 作品名 + 核心看点
+- 【策略】成功策略，核心打法 2-3 点
+- 【渠道】传播渠道/平台
+- 【成效】成效数据/影响（如有数据；没有就写"暂无具体公开数据"）
+- 【学习要点】值得学习的 1-2 点
 
 同时再提供 1 条不同细分领域/方向的对照案例（同样格式）。
 
 2 条案例之间用一行 "=====案例2=====" 分隔。
 
-请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容。`;
+请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容（即使需要推测或通用分析，也必须输出完整结构）。${dedup}`;
         }
         return `请拆解 2 个不同细分领域的中国文娱行业成功案例。领域限定在：演出市场（演唱会/音乐节/话剧/戏曲/Livehouse）、电视剧市场、电影市场、互联网娱乐产业（短视频/长视频/直播）、网络娱乐行业（网文/动漫/游戏/IP衍生）中选 2 个不同的。
+
 要求：
 1. 案例必须是 2025-2026 年最新、近期的真实事件，越新越好
-2. 严格按以下格式输出 2 条案例，案例之间用一行 "=====案例2=====" 分隔：
+2. ${titleRule}
+3. 每个字段内容必须完整充实，不能只写一句话或留空
+4. 严格按以下格式输出 2 条案例，案例之间用一行 "=====案例2=====" 分隔：
 
 【案例 1】
 【主体】平台/公司/作品名
 【行业】细分行业
-【标题】案例标题
+【标题】主体/平台 + 《作品名》+ 核心看点
 【策略】
 （核心策略 2-3 点）
 【渠道】
@@ -2945,7 +3084,7 @@ async function aiGenerate(type, defaultValue) {
 【案例 2】
 【主体】平台/公司/作品名
 【行业】细分行业
-【标题】案例标题
+【标题】主体/平台 + 《作品名》+ 核心看点
 【策略】
 （核心策略）
 【渠道】
@@ -2955,7 +3094,7 @@ async function aiGenerate(type, defaultValue) {
 【学习要点】
 （学习要点）
 
-请直接输出，不要寒暄。`;
+请直接输出，不要寒暄。${dedup}`;
       }
     },
     topic: {
@@ -3056,6 +3195,7 @@ ${input ? `补充要求：${input}` : ''}
   };
 
   const cfg = prompts[type];
+  const existing = getExistingList(type);
   let input;
   if (type === 'ai' || type === 'ent') {
     input = await openAIInputModal(cfg, defaultValue || '');
@@ -3069,30 +3209,53 @@ ${input ? `补充要求：${input}` : ''}
   openModal(modal);
 
   try {
-    const res = await fetch(api.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api.key },
-      body: JSON.stringify({
-        model: api.model || 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: '你是一位资深的行业研究专家，输出内容专业、真实、有深度。严格按照用户要求的格式输出，不要使用 markdown 标题。' },
-          { role: 'user', content: cfg.prompt(input) }
-        ],
-        temperature: 0.7,
-        max_tokens: 3000
-      })
-    });
-    if (!res.ok) { const t = await res.text(); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 200)); }
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).slice(0, 200));
-    const content = data.choices?.[0]?.message?.content || '';
+    let content = '';
+    let lastErr = null;
+    // 空内容自动重试一次：去掉去重段、追加"必须输出"强指令，规避模型空回/过度顺从去重
+    for (let attempt = 1; attempt <= 2 && !content; attempt++) {
+      const useExisting = attempt === 1 ? existing : '';
+      const extra = attempt === 2
+        ? '\n\n【重要补充指令】上一次生成返回了空内容。请务必输出：无论是否了解该关键词，都必须给出至少 1 条相关案例（不了解就给【通用分析】案例），绝对禁止返回空白或只回复"不了解"。'
+        : '';
+      try {
+        const res = await fetch(api.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api.key },
+          body: JSON.stringify({
+            model: api.model || 'gpt-3.5-turbo',
+            messages: [
+              { role: 'system', content: '你是一位资深的行业研究专家，输出内容专业、真实、有深度。严格按照用户要求的格式输出，不要使用 markdown 标题。' },
+              { role: 'user', content: cfg.prompt(input, useExisting) + extra }
+            ],
+            temperature: 0.7,
+            max_tokens: 4096
+          })
+        });
+        if (!res.ok) { const t = await res.text(); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 200)); }
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).slice(0, 200));
+        // 多级兜底：扫遍整个响应 JSON 找正文
+        content = extractAIContent(data);
+        if (content) break;
+        // 空响应时打完整字段诊断，方便定位是哪个字段缺失
+        console.log(`第 ${attempt} 次生成返回空，尝试重试…`);
+        try { console.log('=== AI 完整原始响应（请把这段截图给开发者）===\n', JSON.stringify(data, null, 2)); } catch (e) { console.log('data:', data); }
+        console.log('字段诊断：message.content=', data.choices?.[0]?.message?.content, '| message.reasoning_content=', data.choices?.[0]?.message?.reasoning_content, '| 顶层 keys=', Object.keys(data).join(','));
+        if (attempt === 1) toast('首次生成内容为空，正在用简化指令重试…', 'warn');
+      } catch (e) {
+        lastErr = e;
+        break; // 真实错误（HTTP/JSON/余额）直接跳出，交给外层统一处理
+      }
+    }
     if (!content) {
-      console.log('API 完整响应：', JSON.stringify(data).slice(0, 500));
-      throw new Error('AI 返回内容为空。可能原因：1) 余额不足 2) 内容被过滤 3) 模型不支持。请打开控制台查看完整响应');
+      const msg = lastErr ? (lastErr.message || String(lastErr)) : 'AI 两次都返回了空响应（已尝试 content / reasoning_content / text / 顶层字段 / 整树扫描）。当前模型：' + (api.model || '默认') + '。请打开浏览器控制台（F12）把那段『AI 完整原始响应』截图发我，我据此适配你的代理返回结构。';
+      console.log('AI 生成最终失败：', msg);
+      throw new Error(msg);
     }
     console.log('AI 返回内容长度：', content.length, '字符');
     console.log('AI 返回内容前 200 字：', content.slice(0, 200));
     closeModal();
+    window.__lastAIGeneratedRaw = content;
     parseAndSave(type, content, input);
   } catch (e) {
     const msg = (e && e.message) ? e.message : String(e);
@@ -3194,20 +3357,20 @@ function parseAndSave(type, content, input) {
     let parts = content.split(/=====\s*案例\s*2\s*=====/i);
     if (parts.length === 1) parts = content.split(/【案例\s*2】/i);
     if (parts.length === 1) parts = content.split(/案例\s*2\s*[：:\n]/i);
-    const saved = [];
+    const parsed = [];
     parts.forEach((part) => {
       part = part.trim();
       if (!part) return;
-      let s = extractSections(part, ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点']);
-      if (!s['品牌'] && !s['标题']) {
-        const keys = ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点'];
+      let s = extractSections(part, ['主体', '行业', '标题', '策略', '渠道', '成效', '学习要点']);
+      if (!s['主体'] && !s['标题']) {
+        const keys = ['主体', '行业', '标题', '策略', '渠道', '成效', '学习要点'];
         const aliases = {
-          '品牌': ['品牌', '品牌名', '品牌名称', '主体', '平台', '公司', '作品', '作品名'],
+          '主体': ['主体', '平台', '公司', '品牌', '品牌名', '品牌名称', '作品', '作品名'],
           '行业': ['行业', '所属行业', '领域', '细分行业'],
           '标题': ['标题', '案例标题', '活动名称', '活动名', '作品名'],
-          '策略': ['策略', '营销策略', '核心打法', '核心策略'],
-          '渠道': ['渠道', '传播渠道', '传播路径', '平台'],
-          '活动效果': ['活动效果', '效果', '效果数据', '成效'],
+          '策略': ['策略', '营销策略', '核心打法', '核心策略', '成功策略'],
+          '渠道': ['渠道', '传播渠道', '传播路径', '传播平台', '平台'],
+          '成效': ['成效', '活动效果', '效果', '效果数据', '成效数据', '影响'],
           '学习要点': ['学习要点', '要点', '值得学习']
         };
         const aliasRe = (k) => new RegExp(aliases[k].map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'));
@@ -3222,39 +3385,41 @@ function parseAndSave(type, content, input) {
           }
         }
       }
-      if (!s['品牌'] && !s['标题']) {
+      if (!s['主体'] && !s['标题']) {
         const firstLine = part.split('\n').find(l => l.trim() && !l.includes('案例') && !l.includes('===')) || '';
         s['标题'] = firstLine.trim().slice(0, 50) || 'AI 生成文娱案例';
         s['策略'] = part.slice(0, 500);
       }
       const obj = {
         id: uid(),
-        brand: (s['品牌'] || '').trim(),
+        brand: (s['主体'] || '').trim(),
         industry: (s['行业'] || '').trim(),
         title: (s['标题'] || '').trim(),
         strategy: (s['策略'] || '').trim(),
         channel: (s['渠道'] || '').trim(),
-        effect: (s['活动效果'] || '').trim(),
+        effect: (s['成效'] || '').trim(),
         note: (s['学习要点'] || '').trim(),
         date: today(),
         currentStage: '观察中',
         tags: ''
       };
-      if (obj.brand || obj.title) {
-        const arr = STORAGE.get('ent', []);
-        arr.unshift(obj);
-        STORAGE.set('ent', arr);
-        saved.push(obj);
-      }
+      if (obj.brand || obj.title) parsed.push(obj);
     });
-    if (saved.length === 0) {
+    if (parsed.length === 0) {
       toast('AI 返回了内容但未能解析，请打开控制台(F12)查看', 'error');
       console.log('=== AI 原始返回 ===');
       console.log(content);
+      if (currentSection === 'career') render();
     } else {
-      toast(`✅ 已生成并保存 ${saved.length} 条文娱案例`, 'success');
+      openAIReviewModal(parsed, 'ent', (confirmed) => {
+        if (!confirmed || confirmed.length === 0) { toast('已取消保存', 'warn'); return; }
+        const arr = STORAGE.get('ent', []);
+        confirmed.forEach(obj => arr.unshift(obj));
+        STORAGE.set('ent', arr);
+        toast(`✅ 已保存 ${confirmed.length} 条文娱案例`, 'success');
+        if (currentSection === 'career') render();
+      });
     }
-    if (currentSection === 'career') render();
   } else if (type === 'trend') {
     let parts = content.split(/=====\s*趋势\s*2\s*=====/i);
     if (parts.length === 1) parts = content.split(/【趋势\s*2】/i);
