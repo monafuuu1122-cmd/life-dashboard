@@ -453,6 +453,33 @@ input, textarea, select { font-family: inherit; font-size: 16px; color: var(--te
 .status-rejected { background: #EEEEEE; color: #666; }
 .status-wishlist { background: #F0E8FF; color: #7050C0; }
 
+/* ========== 特殊：求职进度线性时间轴 ========== */
+.job-timeline { display: flex; align-items: flex-start; gap: 0; margin-top: 10px; padding: 4px 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.job-timeline::-webkit-scrollbar { height: 4px; }
+.job-timeline::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.job-tl-node { position: relative; flex: 1; min-width: 78px; text-align: center; padding: 0 6px; }
+.job-tl-node:not(:last-child)::after { content: ''; position: absolute; top: 9px; left: calc(50% + 14px); right: calc(-50% + 14px); height: 2px; background: var(--border); z-index: 0; }
+.job-tl-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); margin: 5px auto 8px; position: relative; z-index: 1; }
+.job-tl-node.current .job-tl-dot { width: 14px; height: 14px; margin: 3px auto 6px; background: var(--blue); box-shadow: 0 0 0 3px rgba(58,123,213,0.15); }
+.job-tl-node.current.status-applied .job-tl-dot { background: var(--blue-dark); box-shadow: 0 0 0 3px rgba(58,123,213,0.18); }
+.job-tl-node.current.status-test .job-tl-dot { background: #C68F2A; box-shadow: 0 0 0 3px rgba(198,143,42,0.18); }
+.job-tl-node.current.status-interview .job-tl-dot { background: #C0407A; box-shadow: 0 0 0 3px rgba(192,64,122,0.18); }
+.job-tl-node.current.status-offer .job-tl-dot { background: var(--green); box-shadow: 0 0 0 3px rgba(40,167,69,0.18); }
+.job-tl-node.current.status-rejected .job-tl-dot { background: #999; box-shadow: 0 0 0 3px rgba(153,153,153,0.18); }
+.job-tl-node.current.status-wishlist .job-tl-dot { background: #7050C0; box-shadow: 0 0 0 3px rgba(112,80,192,0.18); }
+.job-tl-stage { font-size: 11px; font-weight: 600; color: var(--text); line-height: 1.3; }
+.job-tl-date { font-size: 10px; color: var(--text-light); margin-top: 2px; }
+@media (max-width: 768px) {
+  .job-timeline { flex-direction: column; align-items: stretch; overflow-x: visible; padding-left: 6px; }
+  .job-tl-node { display: flex; align-items: flex-start; text-align: left; min-width: auto; padding: 0 0 16px 18px; }
+  .job-tl-node:not(:last-child)::after { top: 14px; left: 5px; right: auto; width: 2px; bottom: -6px; height: auto; }
+  .job-tl-dot { position: absolute; left: 0; top: 2px; margin: 0; }
+  .job-tl-node.current .job-tl-dot { margin: 0; top: 0; }
+  .job-tl-info { display: flex; flex-direction: column; }
+  .job-tl-stage { font-size: 12px; }
+  .job-tl-date { font-size: 11px; }
+}
+
 /* ========== 特殊：论文多章节进度 ========== */
 .paper-progress { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 14px; }
 .chapter-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -868,11 +895,77 @@ const STORAGE = {
   totalCount: () => { let t = 0; const skip = ['api','settings','initialized']; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('wb_life_')) { const key = k.replace('wb_life_',''); if (skip.includes(key)) continue; try { const v = JSON.parse(localStorage.getItem(k)); if (Array.isArray(v)) t += v.length; } catch {} } } return t; }
 };
 
+// ===== 二进制文件存储 (IndexedDB) — 给 PDF / 图片用，避开 localStorage 5MB 上限 =====
+const FILESTORE = (() => {
+  const DB_NAME = 'wb_filestore';
+  const STORE = 'files';
+  let _db = null;
+  function open() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE); };
+      req.onsuccess = () => { _db = req.result; resolve(_db); };
+      req.onerror = () => reject(req.error);
+    });
+  }
+  function tx(mode) { return open().then(db => db.transaction(STORE, mode).objectStore(STORE)); }
+  return {
+    put(id, file) {
+      return tx('readwrite').then(store => new Promise((resolve, reject) => {
+        const req = store.put(file, id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+      }));
+    },
+    get(id) {
+      return tx('readonly').then(store => new Promise((resolve, reject) => {
+        const req = store.get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      }));
+    },
+    del(id) {
+      return tx('readwrite').then(store => new Promise((resolve, reject) => {
+        const req = store.delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+      }));
+    },
+    // 用 file 对象存储（含 blob/name/size/type），读取时拿到原始 Blob
+  };
+})();
+
 // ===== 云端同步层 (Supabase 直连 + 客户端加密) =====
 const SUPABASE = {
   url: 'https://vfjsrixcxcvqscrbdyye.supabase.co/rest/v1',
   key: 'sb_publishable_AHtUtAYFy3wQBCkSxOsU1Q_z7m1O7Ij',
   table: 'wb_sync'
+};
+
+// ===== Supabase Storage 文件层 — 给 PDF 等大文件用，跨设备访问 =====
+const SUPABASE_FILE = {
+  projectUrl: SUPABASE.url.replace('/rest/v1', ''),            // https://xxx.supabase.co
+  bucket: 'job_pdfs',
+  authHeader: () => 'Bearer ' + SUPABASE.key,
+  async upload(key, blob) {
+    const res = await fetch(`${this.projectUrl}/storage/v1/object/${this.bucket}/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      headers: { 'Authorization': this.authHeader(), 'Content-Type': 'application/pdf', 'x-upsert': 'true' },
+      body: blob
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error('Storage HTTP ' + res.status + '：' + t.slice(0, 150)); }
+    return this.publicUrl(key);
+  },
+  publicUrl(key) { return `${this.projectUrl}/storage/v1/object/public/${this.bucket}/${encodeURIComponent(key)}`; },
+  async del(key) {
+    const res = await fetch(`${this.projectUrl}/storage/v1/object/${this.bucket}/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': this.authHeader() }
+    });
+    if (!res.ok && res.status !== 404) { const t = await res.text(); throw new Error('Storage DELETE HTTP ' + res.status + '：' + t.slice(0, 150)); }
+    return true;
+  }
 };
 const SYNC_AVAIL = !!(window.crypto && window.crypto.subtle);
 const SYNC = (function () {
@@ -1280,6 +1373,39 @@ function renderJob() {
   return html;
 }
 
+// 阶段文本 → 状态色（模糊匹配，支持自由输入如「一面/二面/终面/HR面」）
+function matchStageStatus(stage) {
+  const s = (stage || '').toLowerCase();
+  if (/拒绝|reject|挂|未通过|淘汰|拒/.test(s)) return 'rejected';
+  if (/offer|录用|录取|发offer/.test(s)) return 'offer';
+  if (/面|终面|hr|交叉|群面|主管|总监|合伙人|boss|leader/.test(s)) return 'interview';
+  if (/笔试|测评|机考|笔考|test/.test(s)) return 'test';
+  if (/投递|网申|投|apply|简历筛选|初筛/.test(s)) return 'applied';
+  if (/意向|关注|收藏|wish|感兴趣|mark/.test(s)) return 'wishlist';
+  return 'applied';
+}
+
+function renderJobTimeline(timeline) {
+  if (!timeline || timeline.length === 0) return '';
+  const statusCls = {
+    wishlist: 'status-wishlist', applied: 'status-applied', test: 'status-test',
+    interview: 'status-interview', offer: 'status-offer', rejected: 'status-rejected'
+  };
+  const nodes = timeline.map((t, i) => {
+    const status = matchStageStatus(t.stage);
+    const cls = statusCls[status] || 'status-applied';
+    const isCurrent = i === timeline.length - 1;
+    return `<div class="job-tl-node ${isCurrent ? 'current ' + cls : ''}">
+      <div class="job-tl-dot"></div>
+      <div class="job-tl-info">
+        <div class="job-tl-stage">${escapeHtml(t.stage)}</div>
+        <div class="job-tl-date">${escapeHtml(t.date || '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="job-timeline">${nodes}</div>`;
+}
+
 function renderJobApps() {
   const jobs = STORAGE.get('jobs', []);
   const order = { interview: 0, test: 1, applied: 2, wishlist: 3, offer: 4, rejected: 5 };
@@ -1301,7 +1427,6 @@ function renderJobApps() {
         const s = statusMap[j.status] || statusMap.applied;
         const urgent = j.nextDate && daysBetween(today(), j.nextDate) <= 3 && daysBetween(today(), j.nextDate) >= 0 && (j.status === 'interview' || j.status === 'test');
         const timeline = j.timeline || [];
-        const lastTl = timeline[timeline.length - 1];
         return `<div class="job-row ${urgent ? 'urgent' : ''}" data-id="${j.id}">
           <div><div style="font-weight: 700;">${escapeHtml(j.company)}</div><div style="font-size: 12px; color: var(--text-light);">${escapeHtml(j.position)}</div></div>
           <div><div style="font-size: 12px;">${escapeHtml(j.location || '-')}</div><div style="font-size: 12px; color: var(--text-light);">${escapeHtml(j.salary || '-')}</div></div>
@@ -1309,7 +1434,8 @@ function renderJobApps() {
           <div style="font-size: 12px;">${j.applyDate || '-'}</div>
           <div style="font-size: 12px;">
             ${j.url ? `<a href="${escapeHtml(j.url)}" target="_blank" style="color: var(--blue-dark); text-decoration: none; font-weight: 600;">🔗 官网</a>` : '<span style="color: var(--text-light);">-</span>'}
-            ${timeline.length > 0 ? `<div style="margin-top: 3px;"><span class="tag" style="font-size: 10px;">${timeline.length} 步</span>${lastTl ? ` <span style="color: var(--text-light);">· ${escapeHtml(lastTl.stage)}</span>` : ''}</div>` : ''}
+            ${j.pdfRef ? `<button type="button" class="btn btn-ghost btn-sm" data-pdf="${j.id}" style="margin-top: 4px; padding: 2px 8px; font-size: 11px; min-height: auto;">📎 ${escapeHtml((j.pdfName || '简历.pdf').length > 14 ? (j.pdfName.slice(0, 12) + '…') : j.pdfName)}${j.pdfSize ? ` · ${(j.pdfSize/1024).toFixed(0)}KB` : ''}</button>` : ''}
+            ${renderJobTimeline(timeline)}
           </div>
           <div style="display: flex; gap: 4px;"><button class="btn btn-ghost btn-sm" data-edit="${j.id}">编辑</button><button class="btn btn-ghost btn-sm" data-del="${j.id}">×</button></div>
         </div>`;
@@ -2077,6 +2203,14 @@ function bindEvents() {
   $$('.subtab').forEach(s => s.onclick = () => switchSubtab(currentSection, s.dataset.sub));
   $$('[data-del]').forEach(b => b.onclick = () => handleDelete(currentSection, currentSubtab[currentSection] || '', b.dataset.del));
   $$('[data-edit]').forEach(b => b.onclick = () => handleEdit(currentSection, currentSubtab[currentSection] || '', b.dataset.edit));
+  $$('[data-pdf]').forEach(b => b.onclick = () => {
+    const id = b.dataset.pdf;
+    const arr = STORAGE.get('jobs', []);
+    const item = arr.find(x => x.id === id);
+    if (!item) { toast('未找到投递记录', 'error'); return; }
+    const cloudUrl = item.pdfUrl || (item.pdfKey ? SUPABASE_FILE.publicUrl(item.pdfKey) : null);
+    previewPdf(`${item.company || ''} · ${item.pdfName || '简历.pdf'}`, { url: cloudUrl, ref: item.pdfRef });
+  });
 
   const bind = (id, fn) => { const el = $('#' + id); if (el) el.onclick = fn; };
   bind('addCase', () => openCaseForm());
@@ -2169,7 +2303,15 @@ function handleDelete(section, sub, id) {
   };
   const storage = (map[`${section}|`] || {})[sub];
   if (!storage) { toast('删除配置错误', 'error'); return; }
-  confirm2('确认删除', '此操作不可撤销，确定要删除这条记录吗？', () => {
+  confirm2('确认删除', '此操作不可撤销，确定要删除这条记录吗？', async () => {
+    // 同步清理云端 + 本地的 PDF
+    if (section === 'job' && sub === 'apps') {
+      const item = STORAGE.get('jobs', []).find(x => x.id === id);
+      if (item) {
+        if (item.pdfKey) { try { await SUPABASE_FILE.del(item.pdfKey); } catch(e) { console.warn('Storage 删除失败:', e); } }
+        if (item.pdfRef) { try { await FILESTORE.del(item.pdfRef); } catch(e) {} }
+      }
+    }
     const arr = STORAGE.get(storage, []);
     STORAGE.set(storage, arr.filter(x => x.id !== id));
     toast('已删除', 'success');
@@ -2285,33 +2427,132 @@ function openEntForm(id) {
   };
 }
 
+// PDF 预览：在页面内模态框中嵌入，避开浏览器弹窗拦截
+function previewPdf(label, source) {
+  // source = { url?: string, ref?: string, file?: File }
+  openModal(`<div class="modal-mask"><div class="modal" style="max-width: 900px; max-height: 92vh; display: flex; flex-direction: column;">
+    <div class="modal-header"><div class="modal-title">简历预览 · ${escapeHtml(label)}</div><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div id="pdfPreviewBody" style="flex: 1; min-height: 60vh; display: flex; align-items: center; justify-content: center; background: var(--bg);">
+      <div style="text-align: center; color: var(--text-light);"><div class="loading" style="width: 28px; height: 28px; border-width: 3px; margin: 0 auto 12px;"></div>正在读取 PDF…</div>
+    </div>
+    <div style="padding: 10px 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+      <div style="font-size: 12px; color: var(--text-light);" id="pdfPreviewSource">来源：读取中…</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">关闭</button>
+    </div>
+  </div></div>`);
+  (async () => {
+    let url = null, sourceLabel = '';
+    try {
+      if (source.url) { url = source.url; sourceLabel = '来源：云端（Supabase Storage）'; }
+      else if (source.file) { url = URL.createObjectURL(source.file); sourceLabel = '来源：本地待保存文件'; }
+      else if (source.ref) {
+        const blob = await FILESTORE.get(source.ref);
+        if (!blob) throw new Error('本地副本丢失');
+        url = URL.createObjectURL(blob);
+        sourceLabel = '来源：本地副本（IndexedDB，仅本设备可访问）';
+      } else { throw new Error('未找到 PDF 引用'); }
+      const body = document.getElementById('pdfPreviewBody');
+      if (body) body.innerHTML = `<embed src="${escapeHtml(url)}" type="application/pdf" style="width: 100%; height: 70vh; border: none;" />`;
+      const src = document.getElementById('pdfPreviewSource');
+      if (src) src.textContent = sourceLabel;
+    } catch (e) {
+      const body = document.getElementById('pdfPreviewBody');
+      if (body) body.innerHTML = `<div style="text-align: center; color: var(--red); padding: 40px;">读取 PDF 失败：${escapeHtml(e.message || e)}<br><small style="color: var(--text-light);">可能未上传到云端或本设备无本地副本</small></div>`;
+    }
+  })();
+}
+
 function openJobForm(id) {
   const item = id ? STORAGE.get('jobs', []).find(x => x.id === id) : null;
   const d = item || { applyDate: today(), timeline: [] };
   const timeline = d.timeline || [{ date: d.applyDate || today(), stage: '已投递', note: '' }];
-  const stages = ['意向', '已投递', '笔试', '面试中', 'Offer', '已拒绝'];
+  const stageOptions = ['意向', '已投递', '笔试', '一面', '二面', '三面', '终面', 'HR面', 'Offer', '已拒绝'];
+  const stageDatalist = `<datalist id="tlStageList">${stageOptions.map(s => `<option value="${s}">`).join('')}</datalist>`;
+  const hasPdf = !!d.pdfRef;
   const html = makeModal(id ? '编辑投递' : '新增投递', `
     <div class="form-row form-row-inline"><div><label class="form-label">公司 *</label><input class="form-input" id="f_company" value="${escapeHtml(d.company || '')}"></div><div><label class="form-label">岗位 *</label><input class="form-input" id="f_position" value="${escapeHtml(d.position || '')}"></div></div>
     <div class="form-row form-row-inline"><div><label class="form-label">地点</label><input class="form-input" id="f_location" value="${escapeHtml(d.location || '')}" placeholder="北京/上海/远程"></div><div><label class="form-label">薪资</label><input class="form-input" id="f_salary" value="${escapeHtml(d.salary || '')}" placeholder="15-25K · 14薪"></div></div>
     <div class="form-row"><label class="form-label">官网投递链接</label><input class="form-input" id="f_url" value="${escapeHtml(d.url || '')}" placeholder="https://...（点击可直接跳转查看进度）"></div>
+    <div class="form-row"><label class="form-label">投递简历 PDF <span style="color: var(--text-light); font-weight: 400; font-size: 12px;">（记录本次投递用的是哪版简历）</span></label>
+      <input type="file" id="f_jobPdf" accept=".pdf,application/pdf" style="display:none">
+      <div id="f_jobPdfArea" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button type="button" class="btn btn-cream btn-sm" id="f_jobPdfBtn">${hasPdf ? '更换 PDF' : '上传 PDF'}</button>
+        <span id="f_jobPdfInfo" style="font-size: 12px; color: var(--text-light);">${hasPdf ? `📎 ${escapeHtml(d.pdfName || '简历.pdf')} · ${d.pdfSize ? ((d.pdfSize/1024).toFixed(0) + 'KB') : ''}` : '单个 PDF 限 5MB 以下，存于浏览器本地（IndexedDB）'}</span>
+        ${hasPdf ? `<button type="button" class="btn btn-ghost btn-sm" id="f_jobPdfPreview">👁 预览</button><button type="button" class="btn btn-ghost btn-sm" id="f_jobPdfClear">删除</button>` : ''}
+      </div>
+    </div>
     <div class="form-row"><label class="form-label">进度时间线 <span style="color: var(--text-light); font-weight: 400; font-size: 12px;">（第一条 = 投递日期，最后一条 = 当前状态）</span></label>
+      ${stageDatalist}
       <div id="timelineEditor" style="display: flex; flex-direction: column; gap: 8px;">
-        ${timeline.map((t, i) => timelineRowHtml(i, t, stages)).join('')}
+        ${timeline.map((t, i) => timelineRowHtml(i, t, stageOptions)).join('')}
       </div>
       <button class="btn btn-ghost btn-sm" id="addTimelineBtn" style="margin-top: 8px;">+ 添加进度</button>
     </div>
     <div class="form-row"><label class="form-label">备注</label><textarea class="form-textarea" id="f_note">${escapeHtml(d.note || '')}</textarea></div>
     <div class="form-actions"><button class="btn btn-primary" id="saveBtn">保存</button><button class="btn btn-ghost" onclick="closeModal()">取消</button></div>`);
   openModal(html);
+  // PDF 状态（保存时再写 IndexedDB）
+  let pendingPdf = null; // {file, name, size} 待保存的新文件
+  let pendingRemove = false; // 用户点了删除
+  const jobId = id || uid();
+  const renderPdfInfo = () => {
+    const info = $('#f_jobPdfInfo');
+    const btn = $('#f_jobPdfBtn');
+    const area = $('#f_jobPdfArea');
+    if (!info || !btn || !area) return;
+    if (pendingPdf) {
+      info.textContent = `📎 ${pendingPdf.name} · ${(pendingPdf.size/1024).toFixed(0)}KB（待保存）`;
+      btn.textContent = '更换 PDF';
+      if (!$('#f_jobPdfPreview')) area.insertAdjacentHTML('beforeend', '<button type="button" class="btn btn-ghost btn-sm" id="f_jobPdfPreview">👁 预览</button>');
+      if (!$('#f_jobPdfClear')) area.insertAdjacentHTML('beforeend', '<button type="button" class="btn btn-ghost btn-sm" id="f_jobPdfClear">删除</button>');
+    } else if (hasPdf && !pendingRemove) {
+      info.textContent = `📎 ${d.pdfName || '简历.pdf'} · ${d.pdfSize ? ((d.pdfSize/1024).toFixed(0) + 'KB') : ''}`;
+      btn.textContent = '更换 PDF';
+      if (!$('#f_jobPdfPreview')) area.insertAdjacentHTML('beforeend', '<button type="button" class="btn btn-ghost btn-sm" id="f_jobPdfPreview">👁 预览</button>');
+      if (!$('#f_jobPdfClear')) area.insertAdjacentHTML('beforeend', '<button type="button" class="btn btn-ghost btn-sm" id="f_jobPdfClear">删除</button>');
+    } else {
+      info.textContent = '单个 PDF 限 5MB 以下，存于浏览器本地（IndexedDB）';
+      btn.textContent = '上传 PDF';
+      $('#f_jobPdfPreview')?.remove();
+      $('#f_jobPdfClear')?.remove();
+    }
+    bindPdfButtons();
+  };
+  const bindPdfButtons = () => {
+    const p = $('#f_jobPdfPreview');
+    if (p) p.onclick = () => {
+      const label = `${d.company || ''} · ${d.pdfName || pendingPdf?.name || '简历.pdf'}`;
+      const source = pendingPdf
+        ? { file: pendingPdf.file }
+        : (hasPdf && !pendingRemove)
+          ? { url: (d.pdfUrl || (d.pdfKey ? SUPABASE_FILE.publicUrl(d.pdfKey) : null)), ref: d.pdfRef }
+          : {};
+      previewPdf(label, source);
+    };
+    const c = $('#f_jobPdfClear');
+    if (c) c.onclick = () => { pendingPdf = null; pendingRemove = true; renderPdfInfo(); };
+  };
+  bindPdfButtons();
+  $('#f_jobPdfBtn').onclick = () => $('#f_jobPdf').click();
+  $('#f_jobPdf').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { toast('请选择 PDF 文件', 'error'); e.target.value = ''; return; }
+    if (file.size > 5 * 1024 * 1024) { toast(`PDF 过大（${(file.size/1024/1024).toFixed(1)}MB），请压缩到 5MB 以下`, 'error'); e.target.value = ''; return; }
+    pendingPdf = { file, name: file.name, size: file.size };
+    pendingRemove = false;
+    renderPdfInfo();
+    toast('PDF 已选择，保存后生效', 'success');
+  };
   $('#addTimelineBtn').onclick = () => {
     const rows = $$('#timelineEditor > .tl-row');
     const tmp = document.createElement('div');
-    tmp.innerHTML = timelineRowHtml(rows.length, { date: today(), stage: '面试中', note: '' }, stages);
+    tmp.innerHTML = timelineRowHtml(rows.length, { date: today(), stage: '一面', note: '' }, stageOptions);
     $('#timelineEditor').appendChild(tmp.firstChild);
     rebindTimelineDels();
   };
   rebindTimelineDels();
-  $('#saveBtn').onclick = () => {
+  $('#saveBtn').onclick = async () => {
     const newTimeline = [];
     $$('#timelineEditor > .tl-row').forEach(row => {
       const date = row.querySelector('[data-tl-date]').value;
@@ -2319,22 +2560,45 @@ function openJobForm(id) {
       const note = row.querySelector('[data-tl-note]').value.trim();
       if (date) newTimeline.push({ date, stage, note });
     });
-    const stageToStatus = { '意向': 'wishlist', '已投递': 'applied', '笔试': 'test', '面试中': 'interview', 'Offer': 'offer', '已拒绝': 'rejected' };
-    const derivedStatus = newTimeline.length > 0 ? (stageToStatus[newTimeline[newTimeline.length - 1].stage] || 'applied') : 'applied';
+    const derivedStatus = newTimeline.length > 0 ? matchStageStatus(newTimeline[newTimeline.length - 1].stage) : 'applied';
     const derivedApplyDate = newTimeline.length > 0 ? newTimeline[0].date : today();
-    const obj = { id: id || uid(), company: $('#f_company').value.trim(), position: $('#f_position').value.trim(), location: $('#f_location').value.trim(), salary: $('#f_salary').value.trim(), status: derivedStatus, applyDate: derivedApplyDate, url: $('#f_url').value.trim(), timeline: newTimeline, note: $('#f_note').value.trim() };
+    const obj = { id: jobId, company: $('#f_company').value.trim(), position: $('#f_position').value.trim(), location: $('#f_location').value.trim(), salary: $('#f_salary').value.trim(), status: derivedStatus, applyDate: derivedApplyDate, url: $('#f_url').value.trim(), timeline: newTimeline, note: $('#f_note').value.trim(), pdfRef: (hasPdf && !pendingRemove && !pendingPdf) ? d.pdfRef : null, pdfUrl: (hasPdf && !pendingRemove && !pendingPdf) ? d.pdfUrl : null, pdfKey: (hasPdf && !pendingRemove && !pendingPdf) ? d.pdfKey : null, pdfName: (hasPdf && !pendingRemove && !pendingPdf) ? d.pdfName : null, pdfSize: (hasPdf && !pendingRemove && !pendingPdf) ? d.pdfSize : null };
     if (!obj.company || !obj.position) { toast('请填写公司和岗位', 'error'); return; }
-    const arr = STORAGE.get('jobs', []);
-    if (id) { const i = arr.findIndex(x => x.id === id); if (i >= 0) arr[i] = obj; } else arr.unshift(obj);
-    STORAGE.set('jobs', arr);
-    toast('已保存', 'success'); closeModal(); render();
+    try {
+      // 处理 PDF：上传 → 同时存 IndexedDB（本地副本）+ Supabase Storage（跨设备）；删除 → 清两边
+      if (pendingPdf) {
+        const key = `job_${jobId}.pdf`;
+        // 本地副本（离线可用）
+        try { await FILESTORE.put('job_' + jobId, pendingPdf.file); obj.pdfRef = 'job_' + jobId; } catch(e) { console.warn('IndexedDB 存 PDF 失败:', e); }
+        // 云端副本（跨设备可用）
+        try {
+          const url = await SUPABASE_FILE.upload(key, pendingPdf.file);
+          obj.pdfUrl = url; obj.pdfKey = key;
+          toast('简历 PDF 已上传到云端，跨设备可访问', 'success');
+        } catch (e) {
+          console.warn('Storage 上传失败:', e);
+          toast('PDF 云同步失败（' + e.message + '），已存本地。请确认 Storage 桶 job_pdfs 已建好且策略已加', 'warn');
+        }
+        obj.pdfName = pendingPdf.name; obj.pdfSize = pendingPdf.size;
+      } else if (pendingRemove && (d.pdfKey || d.pdfRef)) {
+        if (d.pdfKey) { try { await SUPABASE_FILE.del(d.pdfKey); } catch(e) { console.warn('Storage 删除失败:', e); } }
+        if (d.pdfRef) { try { await FILESTORE.del(d.pdfRef); } catch(e) {} }
+        obj.pdfRef = null; obj.pdfUrl = null; obj.pdfKey = null; obj.pdfName = null; obj.pdfSize = null;
+      }
+      const arr = STORAGE.get('jobs', []);
+      if (id) { const i = arr.findIndex(x => x.id === id); if (i >= 0) arr[i] = obj; } else arr.unshift(obj);
+      STORAGE.set('jobs', arr);
+      toast('已保存', 'success'); closeModal(); render();
+    } catch (e) {
+      toast('保存失败：' + (e.message || e), 'error');
+    }
   };
 }
 
-function timelineRowHtml(idx, t, stages) {
-  return `<div class="tl-row" style="display: grid; grid-template-columns: 130px 100px 1fr 32px; gap: 6px; align-items: center; background: var(--bg); border-radius: 8px; padding: 6px;">
+function timelineRowHtml(idx, t, stageOptions) {
+  return `<div class="tl-row" style="display: grid; grid-template-columns: 130px 110px 1fr 32px; gap: 6px; align-items: center; background: var(--bg); border-radius: 8px; padding: 6px;">
     <input class="form-input" type="date" data-tl-date value="${t.date || ''}" style="font-size: 13px;">
-    <select class="form-select" data-tl-stage style="font-size: 13px;">${stages.map(s => `<option ${t.stage === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+    <input class="form-input" data-tl-stage list="tlStageList" value="${escapeHtml(t.stage || '')}" placeholder="阶段" style="font-size: 13px;">
     <input class="form-input" data-tl-note value="${escapeHtml(t.note || '')}" placeholder="备注（可选）" style="font-size: 13px;">
     <button class="btn btn-ghost btn-sm" data-tl-del="${idx}" title="删除" style="padding: 4px; min-height: auto;">×</button>
   </div>`;
