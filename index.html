@@ -897,7 +897,7 @@ const STORAGE = {
 
 // ===== 二进制文件存储 (IndexedDB) — 给 PDF / 图片用，避开 localStorage 5MB 上限 =====
 const FILESTORE = (() => {
-  const DB_NAME = 'wb_filestore';
+  const DB_NAME = 'wb_filestore_v2';
   const STORE = 'files';
   let _db = null;
   function open() {
@@ -907,41 +907,93 @@ const FILESTORE = (() => {
       req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE); };
       req.onsuccess = () => { _db = req.result; resolve(_db); };
       req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error('IndexedDB 被其他标签页阻塞，请关闭其他页面后重试'));
     });
   }
-  function tx(mode) { return open().then(db => db.transaction(STORE, mode).objectStore(STORE)); }
   return {
-    put(id, file) {
-      return tx('readwrite').then(store => new Promise((resolve, reject) => {
-        const req = store.put(file, id);
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => reject(req.error);
-      }));
+    async put(id, file) {
+      let buf;
+      try {
+        buf = await file.arrayBuffer();
+      } catch (e) {
+        throw new Error('无法读取 PDF 文件内容：' + (e.message || e));
+      }
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const store = tx.objectStore(STORE);
+        const req = store.put({ buf, name: file.name, type: file.type || 'application/pdf', size: file.size, ts: Date.now() }, id);
+        req.onsuccess = () => {};
+        req.onerror = () => reject(req.error || new Error('IndexedDB 写入失败'));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'));
+        tx.onabort = () => reject(new Error('IndexedDB 事务被中止'));
+      });
     },
-    get(id) {
-      return tx('readonly').then(store => new Promise((resolve, reject) => {
+    async get(id) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const store = tx.objectStore(STORE);
         const req = store.get(id);
-        req.onsuccess = () => resolve(req.result || null);
+        req.onsuccess = () => {
+          const r = req.result;
+          if (!r) return resolve(null);
+          // v2 格式：{ buf: ArrayBuffer, type, name, size }
+          if (r.buf && r.buf instanceof ArrayBuffer) {
+            return resolve(new Blob([r.buf], { type: r.type || 'application/pdf' }));
+          }
+          // 兼容旧格式（直接存的 Blob/File）
+          if (r instanceof Blob) return resolve(r);
+          resolve(null);
+        };
         req.onerror = () => reject(req.error);
-      }));
+      });
     },
-    del(id) {
-      return tx('readwrite').then(store => new Promise((resolve, reject) => {
+    async del(id) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const store = tx.objectStore(STORE);
         const req = store.delete(id);
         req.onsuccess = () => resolve(true);
         req.onerror = () => reject(req.error);
-      }));
+        tx.oncomplete = () => resolve(true);
+      });
     },
-    // 用 file 对象存储（含 blob/name/size/type），读取时拿到原始 Blob
+    // 返回 IndexedDB 是否可用（用于提前检测）
+    async check() {
+      try {
+        const db = await open();
+        return !!db;
+      } catch (e) {
+        return false;
+      }
+    }
   };
 })();
 
 // ===== 云端同步层 (Supabase 直连 + 客户端加密) =====
 const SUPABASE = {
   url: 'https://vfjsrixcxcvqscrbdyye.supabase.co/rest/v1',
-  key: 'sb_publishable_AHtUtAYFy3wQBCkSxOsU1Q_z7m1O7Ij',
+  key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZmanNyaXhjeGN2cXNjcmJkeXllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5ODYxMTIsImV4cCI6MjEwMTU2MjExMn0.amDQe2FP3K9AlZ80Ium1MWFiVRAS9kETqm5eLMPu6yA',
   table: 'wb_sync'
 };
+// Supabase 的 REST / Storage 接口要求 Authorization: Bearer 的是「anon public 密钥」（JWT，eyJ 开头、含 2 个点）。
+// 形如 sb_publishable_xxx 的 publishable key 不是 JWT，直接传会报 Invalid Compact JWS / 401。
+// 提前校验，给出可读提示，避免用户看到一堆乱码报错。
+function supabaseKeyIsJwt() {
+  const k = (SUPABASE.key || '').trim();
+  return k.startsWith('eyJ') && (k.match(/\./g) || []).length === 2;
+}
+function assertSupabaseJwt(where) {
+  if (!supabaseKeyIsJwt()) {
+    throw new Error(
+      `${where}失败：当前 SUPABASE.key 不是有效的「anon public」JWT（应以 eyJ 开头）。` +
+      `请到 Supabase 后台 Project Settings → API 复制 anon public 密钥替换，publishable key 无法用于 Storage/REST 鉴权。`
+    );
+  }
+}
 
 // ===== Supabase Storage 文件层 — 给 PDF 等大文件用，跨设备访问 =====
 const SUPABASE_FILE = {
@@ -949,6 +1001,7 @@ const SUPABASE_FILE = {
   bucket: 'job_pdfs',
   authHeader: () => 'Bearer ' + SUPABASE.key,
   async upload(key, blob) {
+    assertSupabaseJwt('PDF 上传');
     const res = await fetch(`${this.projectUrl}/storage/v1/object/${this.bucket}/${encodeURIComponent(key)}`, {
       method: 'PUT',
       headers: { 'Authorization': this.authHeader(), 'Content-Type': 'application/pdf', 'x-upsert': 'true' },
@@ -959,6 +1012,7 @@ const SUPABASE_FILE = {
   },
   publicUrl(key) { return `${this.projectUrl}/storage/v1/object/public/${this.bucket}/${encodeURIComponent(key)}`; },
   async del(key) {
+    assertSupabaseJwt('PDF 删除');
     const res = await fetch(`${this.projectUrl}/storage/v1/object/${this.bucket}/${encodeURIComponent(key)}`, {
       method: 'DELETE',
       headers: { 'Authorization': this.authHeader() }
@@ -981,7 +1035,7 @@ const SYNC = (function () {
   async function deriveKey(p, salt){ const base=await crypto.subtle.importKey('raw', new TextEncoder().encode(p), 'PBKDF2', false, ['deriveKey']); return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:100000, hash:'SHA-256'}, base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); }
   async function encryptObj(obj, p){ const salt=crypto.getRandomValues(new Uint8Array(16)); const iv=crypto.getRandomValues(new Uint8Array(12)); const key=await deriveKey(p,salt); const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, new TextEncoder().encode(JSON.stringify(obj))); const packed=new Uint8Array(28+ct.byteLength); packed.set(salt,0); packed.set(iv,16); packed.set(new Uint8Array(ct),28); return bytesToB64(packed); }
   async function decryptObj(b64, p){ const packed=b64ToBytes(b64); const salt=packed.slice(0,16), iv=packed.slice(16,28), ct=packed.slice(28); const key=await deriveKey(p,salt); const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv}, key, ct); return JSON.parse(new TextDecoder().decode(pt)); }
-  async function sbGet(){ const r=await fetch(`${SUPABASE.url}/${SUPABASE.table}?slot=eq.${SLOT}&select=*`, { headers:{ apikey:SUPABASE.key, Authorization:`Bearer ${SUPABASE.key}` } }); if(!r.ok) throw new Error('拉取失败 '+r.status); const rows=await r.json(); return rows[0]||null; }
+  async function sbGet(){ assertSupabaseJwt('云端拉取'); const r=await fetch(`${SUPABASE.url}/${SUPABASE.table}?slot=eq.${SLOT}&select=*`, { headers:{ apikey:SUPABASE.key, Authorization:`Bearer ${SUPABASE.key}` } }); if(!r.ok) throw new Error('拉取失败 '+r.status); const rows=await r.json(); return rows[0]||null; }
   async function sbWrite(row){ const h={ apikey:SUPABASE.key, Authorization:`Bearer ${SUPABASE.key}`, 'Content-Type':'application/json' }; const existing=await sbGet(); if(existing){ const r=await fetch(`${SUPABASE.url}/${SUPABASE.table}?slot=eq.${SLOT}`, { method:'PATCH', headers:h, body:JSON.stringify({ pwcheck:row.pwcheck, payload:row.payload, updated_at:row.updated_at }) }); if(!r.ok) throw new Error('保存失败 '+r.status); } else { const r=await fetch(`${SUPABASE.url}/${SUPABASE.table}`, { method:'POST', headers:h, body:JSON.stringify([row]) }); if(!r.ok) throw new Error('保存失败 '+r.status); } }
   function collect(){ const d={}; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(PREFIX)) d[k]=localStorage.getItem(k); } return d; }
   function apply(obj){ if(!obj) return; suppress=true; Object.keys(obj).forEach(k=>{ if(k.startsWith(PREFIX)) localStorage.setItem(k, obj[k]); }); suppress=false; }
@@ -2209,7 +2263,7 @@ function bindEvents() {
     const item = arr.find(x => x.id === id);
     if (!item) { toast('未找到投递记录', 'error'); return; }
     const cloudUrl = item.pdfUrl || (item.pdfKey ? SUPABASE_FILE.publicUrl(item.pdfKey) : null);
-    previewPdf(`${item.company || ''} · ${item.pdfName || '简历.pdf'}`, { url: cloudUrl, ref: item.pdfRef });
+    previewPdf(`${item.company || ''} · ${item.pdfName || '简历.pdf'}`, { url: cloudUrl, ref: item.pdfRef, key: item.pdfKey });
   });
 
   const bind = (id, fn) => { const el = $('#' + id); if (el) el.onclick = fn; };
@@ -2429,7 +2483,7 @@ function openEntForm(id) {
 
 // PDF 预览：在页面内模态框中嵌入，避开浏览器弹窗拦截
 function previewPdf(label, source) {
-  // source = { url?: string, ref?: string, file?: File }
+  // source = { url?: string, ref?: string, file?: File, key?: string }
   openModal(`<div class="modal-mask"><div class="modal" style="max-width: 900px; max-height: 92vh; display: flex; flex-direction: column;">
     <div class="modal-header"><div class="modal-title">简历预览 · ${escapeHtml(label)}</div><button class="modal-close" onclick="closeModal()">×</button></div>
     <div id="pdfPreviewBody" style="flex: 1; min-height: 60vh; display: flex; align-items: center; justify-content: center; background: var(--bg);">
@@ -2441,23 +2495,44 @@ function previewPdf(label, source) {
     </div>
   </div></div>`);
   (async () => {
-    let url = null, sourceLabel = '';
+    let url = null, sourceLabel = '', errors = [];
     try {
-      if (source.url) { url = source.url; sourceLabel = '来源：云端（Supabase Storage）'; }
-      else if (source.file) { url = URL.createObjectURL(source.file); sourceLabel = '来源：本地待保存文件'; }
+      // 优先尝试云端 URL（跨设备可用）
+      const cloudUrl = source.url || (source.key ? SUPABASE_FILE.publicUrl(source.key) : null);
+      if (cloudUrl) {
+        url = cloudUrl;
+        sourceLabel = '来源：云端（Supabase Storage）';
+      }
+      // 没有云端 URL 或本地更优先时，尝试本地 IndexedDB
+      else if (source.file) {
+        url = URL.createObjectURL(source.file);
+        sourceLabel = '来源：本地待保存文件';
+      }
       else if (source.ref) {
-        const blob = await FILESTORE.get(source.ref);
-        if (!blob) throw new Error('本地副本丢失');
-        url = URL.createObjectURL(blob);
-        sourceLabel = '来源：本地副本（IndexedDB，仅本设备可访问）';
-      } else { throw new Error('未找到 PDF 引用'); }
+        try {
+          const blob = await FILESTORE.get(source.ref);
+          if (!blob) throw new Error('IndexedDB 中无此文件记录');
+          url = URL.createObjectURL(blob);
+          sourceLabel = '来源：本地副本（IndexedDB，仅本设备可访问）';
+        } catch (localErr) {
+          errors.push('本地副本：' + (localErr.message || localErr));
+          // 如果本地失败但云端有 key，回退到云端
+          if (source.key) {
+            url = SUPABASE_FILE.publicUrl(source.key);
+            sourceLabel = '来源：云端（本地读取失败，已回退）';
+          }
+        }
+      } else {
+        throw new Error('未找到 PDF 引用（无 url/ref/file/key）');
+      }
+      if (!url) throw new Error(errors.join('；') || '无法获取 PDF 地址');
       const body = document.getElementById('pdfPreviewBody');
       if (body) body.innerHTML = `<embed src="${escapeHtml(url)}" type="application/pdf" style="width: 100%; height: 70vh; border: none;" />`;
       const src = document.getElementById('pdfPreviewSource');
       if (src) src.textContent = sourceLabel;
     } catch (e) {
       const body = document.getElementById('pdfPreviewBody');
-      if (body) body.innerHTML = `<div style="text-align: center; color: var(--red); padding: 40px;">读取 PDF 失败：${escapeHtml(e.message || e)}<br><small style="color: var(--text-light);">可能未上传到云端或本设备无本地副本</small></div>`;
+      if (body) body.innerHTML = `<div style="text-align: center; color: var(--red); padding: 40px;">读取 PDF 失败：${escapeHtml(e.message || e)}<br><small style="color: var(--text-light);">可能原因：① 未成功上传到云端；② 本设备 IndexedDB 被禁用/清理；③ 在微信/隐私模式下本地存储不可用。<br>建议：重新编辑该投递记录，重新上传一次 PDF。</small></div>`;
     }
   })();
 }
@@ -2525,7 +2600,7 @@ function openJobForm(id) {
       const source = pendingPdf
         ? { file: pendingPdf.file }
         : (hasPdf && !pendingRemove)
-          ? { url: (d.pdfUrl || (d.pdfKey ? SUPABASE_FILE.publicUrl(d.pdfKey) : null)), ref: d.pdfRef }
+          ? { url: (d.pdfUrl || (d.pdfKey ? SUPABASE_FILE.publicUrl(d.pdfKey) : null)), ref: d.pdfRef, key: d.pdfKey }
           : {};
       previewPdf(label, source);
     };
@@ -2568,18 +2643,40 @@ function openJobForm(id) {
       // 处理 PDF：上传 → 同时存 IndexedDB（本地副本）+ Supabase Storage（跨设备）；删除 → 清两边
       if (pendingPdf) {
         const key = `job_${jobId}.pdf`;
+        const localKey = 'job_' + jobId;
+        let localOk = false, cloudOk = false;
         // 本地副本（离线可用）
-        try { await FILESTORE.put('job_' + jobId, pendingPdf.file); obj.pdfRef = 'job_' + jobId; } catch(e) { console.warn('IndexedDB 存 PDF 失败:', e); }
+        try {
+          const idbAvail = await FILESTORE.check();
+          if (!idbAvail) throw new Error('本设备/浏览器不支持或禁用了 IndexedDB（常见于微信内置浏览器、隐私模式、iOS 低电量模式）');
+          await FILESTORE.put(localKey, pendingPdf.file);
+          // 再读一次确认真的写进去了
+          const verify = await FILESTORE.get(localKey);
+          if (!verify) throw new Error('IndexedDB 写入后验证失败');
+          obj.pdfRef = localKey;
+          localOk = true;
+        } catch(e) {
+          console.warn('IndexedDB 存 PDF 失败:', e);
+          toast('PDF 本地存储失败：' + (e.message || e), 'warn');
+        }
         // 云端副本（跨设备可用）
         try {
           const url = await SUPABASE_FILE.upload(key, pendingPdf.file);
           obj.pdfUrl = url; obj.pdfKey = key;
+          cloudOk = true;
           toast('简历 PDF 已上传到云端，跨设备可访问', 'success');
         } catch (e) {
           console.warn('Storage 上传失败:', e);
-          toast('PDF 云同步失败（' + e.message + '），已存本地。请确认 Storage 桶 job_pdfs 已建好且策略已加', 'warn');
+          if (localOk) {
+            toast('PDF 云同步失败（' + e.message + '），已存本地。如需跨设备访问，请确认 Storage 桶 job_pdfs 已建好且策略已加', 'warn');
+          } else {
+            toast('PDF 保存完全失败：云端和本地都未成功。建议换浏览器（如 Chrome/Safari 原生浏览器）重试。错误：' + e.message, 'error');
+          }
         }
-        obj.pdfName = pendingPdf.name; obj.pdfSize = pendingPdf.size;
+        // 本地或云端至少成功一个才记录元数据，否则当作没上传
+        if (localOk || cloudOk) {
+          obj.pdfName = pendingPdf.name; obj.pdfSize = pendingPdf.size;
+        }
       } else if (pendingRemove && (d.pdfKey || d.pdfRef)) {
         if (d.pdfKey) { try { await SUPABASE_FILE.del(d.pdfKey); } catch(e) { console.warn('Storage 删除失败:', e); } }
         if (d.pdfRef) { try { await FILESTORE.del(d.pdfRef); } catch(e) {} }
