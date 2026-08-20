@@ -395,9 +395,12 @@ input, textarea, select { font-family: inherit; font-size: 16px; color: var(--te
   box-shadow: var(--shadow);
   border-left: 5px solid var(--blue);
   margin-bottom: 14px;
-  max-height: 75vh;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
+.ai-filter-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.ai-filter-opt { font-size: 12px; padding: 6px 12px; border-radius: 16px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; transition: all 0.15s; }
+.ai-filter-opt.active { background: var(--blue); color: #fff; border-color: var(--blue); }
 .case-brand {
   display: inline-block;
   background: var(--cream);
@@ -1336,6 +1339,7 @@ function renderCases() {
       <div class="case-section"><div class="case-section-title">▎渠道</div><div class="case-section-content">${escapeHtml(c.channel || '')}</div></div>
       <div class="case-section"><div class="case-section-title">▎活动效果</div><div class="case-section-content">${escapeHtml(c.effect || '')}</div></div>
       ${c.note ? `<div class="case-section"><div class="case-section-title">▎我的笔记</div><div class="case-section-content">${escapeHtml(c.note)}</div></div>` : ''}
+      ${c.source ? `<div class="case-section"><div class="case-section-title">▎数据来源</div><div class="case-section-content">${escapeHtml(c.source)}</div></div>` : ''}
       <div class="card-actions"><button class="btn btn-ghost btn-sm" data-edit="${c.id}">编辑</button><button class="btn btn-ghost btn-sm" data-del="${c.id}">删除</button></div>
     </div>`).join('');
   }
@@ -1408,6 +1412,7 @@ function renderEnt() {
       <div class="case-section"><div class="case-section-title">▎渠道/平台</div><div class="case-section-content">${escapeHtml(c.channel || '')}</div></div>
       <div class="case-section"><div class="case-section-title">▎成效</div><div class="case-section-content">${escapeHtml(c.effect || '')}</div></div>
       ${c.note ? `<div class="case-section"><div class="case-section-title">▎学习要点</div><div class="case-section-content">${escapeHtml(c.note)}</div></div>` : ''}
+      ${c.source ? `<div class="case-section"><div class="case-section-title">▎数据来源</div><div class="case-section-content">${escapeHtml(c.source)}</div></div>` : ''}
       <div class="card-actions"><button class="btn btn-ghost btn-sm" data-edit="${c.id}">编辑</button><button class="btn btn-ghost btn-sm" data-del="${c.id}">删除</button></div>
     </div>`).join('');
   }
@@ -2098,6 +2103,7 @@ function renderTopics() {
 // ===== 设置 =====
 function renderSettings() {
   const api = STORAGE.get('api', { url: '', key: '', model: '' });
+  const searchCfg = STORAGE.get('search', { provider: 'wikipedia', key: '' });
   const total = STORAGE.totalCount();
   const size = STORAGE.totalSize();
   return `<div class="section-header"><svg class="section-icon" viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="#A8C5E0" stroke="#3A3A3A" stroke-width="2.5"/><circle cx="50" cy="50" r="12" fill="white" stroke="#3A3A3A" stroke-width="2.5"/><line x1="50" y1="20" x2="50" y2="10" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/><line x1="50" y1="80" x2="50" y2="90" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/><line x1="20" y1="50" x2="10" y2="50" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/><line x1="80" y1="50" x2="90" y2="50" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/></svg><div class="section-title">设置</div></div>
@@ -2106,6 +2112,18 @@ function renderSettings() {
       <div class="form-row"><label class="form-label">API Key <span class="req">*</span></label><input class="form-input" id="apiKey" type="password" value="${escapeHtml(api.key)}" placeholder="sk-..."></div>
       <div class="form-row"><label class="form-label">模型名称</label><input class="form-input" id="apiModel" value="${escapeHtml(api.model)}" placeholder="deepseek-chat"><div class="form-hint">如：deepseek-chat、moonshot-v1-8k、gpt-4o-mini、qwen-turbo</div></div>
       <div class="form-actions"><button class="btn btn-primary" id="saveApi">保存配置</button><button class="btn btn-ghost" id="testApi">测试连接</button></div>
+    </div></div>
+    <div class="settings-section"><div class="settings-section-title">联网搜索（可选 · 给 AI 加真实资料底座）</div><div class="card">
+      <div class="form-row"><label class="form-label">搜索服务</label>
+        <select class="form-input" id="searchProvider">
+          <option value="wikipedia"${searchCfg.provider === 'wikipedia' ? ' selected' : ''}>维基百科（免 Key，覆盖通用知识 / 品牌背景）</option>
+          <option value="tavily"${searchCfg.provider === 'tavily' ? ' selected' : ''}>Tavily（需 Key，最适合营销 / 新闻检索）</option>
+          <option value="brave"${searchCfg.provider === 'brave' ? ' selected' : ''}>Brave Search（需 Key，通用网页检索）</option>
+        </select>
+      </div>
+      <div class="form-row" id="searchKeyRow"><label class="form-label">搜索 API Key</label><input class="form-input" id="searchKey" type="password" value="${escapeHtml(searchCfg.key)}" placeholder="Tavily / Brave 的 Key"></div>
+      <div class="form-hint">选「维基百科」无需 Key，立即可用（通用知识够用）。Tavily / Brave 需自备 Key——Key 与 AI Key 一样存在浏览器本地，站点公开部署时请勿共用重要账号 Key。</div>
+      <div class="form-actions"><button class="btn btn-primary" id="saveSearch">保存搜索配置</button></div>
     </div></div>
     <div class="settings-section"><div class="settings-section-title">数据备份</div><div class="card">
       <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light);">📊 当前数据：${total} 条记录 · 占用空间约 ${(size / 1024).toFixed(1)} KB</div>
@@ -2335,6 +2353,12 @@ function bindEvents() {
   });
   bind('saveApi', saveApiSettings);
   bind('testApi', testApiSettings);
+  bind('saveSearch', saveSearchSettings);
+  const sp = $('#searchProvider');
+  if (sp) {
+    const syncKeyRow = () => { const row = $('#searchKeyRow'); if (row) row.style.display = sp.value === 'wikipedia' ? 'none' : ''; };
+    sp.onchange = syncKeyRow; syncKeyRow();
+  }
   bind('exportBtn', exportData);
   bind('clearAll', clearAllData);
   bind('loadDemo', loadDemoData);
@@ -3074,6 +3098,13 @@ function saveApiSettings() {
   toast('配置已保存', 'success');
 }
 
+function saveSearchSettings() {
+  const provider = $('#searchProvider') ? $('#searchProvider').value : 'wikipedia';
+  const key = $('#searchKey') ? $('#searchKey').value.trim() : '';
+  STORAGE.set('search', { provider, key });
+  toast('搜索配置已保存', 'success');
+}
+
 async function testApiSettings() {
   const api = { url: $('#apiUrl').value.trim(), key: $('#apiKey').value.trim(), model: $('#apiModel').value.trim() || 'gpt-3.5-turbo' };
   if (!api.url || !api.key) { toast('请填写 API 地址和 Key', 'error'); return; }
@@ -3104,16 +3135,56 @@ function openAIInputModal(cfg, defaultValue) {
           <div style="display: flex; flex-wrap: wrap; gap: 8px;">${tagsHtml}</div>
         </div>
       </div>
+      <div class="form-row" style="margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border);">
+        <label class="form-label">信息来源筛选</label>
+        <div style="font-size: 12px; color: var(--text-light); margin-bottom: 6px;">时间范围</div>
+        <div class="ai-filter-group" data-group="timeRange">
+          <button type="button" class="ai-filter-opt active" data-value="any">不限</button>
+          <button type="button" class="ai-filter-opt" data-value="2025-2026">近 1 年（2025-2026）</button>
+          <button type="button" class="ai-filter-opt" data-value="2024-2026">近 2 年（2024-2026）</button>
+        </div>
+        <div style="font-size: 12px; color: var(--text-light); margin: 12px 0 6px;">真实性要求</div>
+        <div class="ai-filter-group" data-group="reliability">
+          <button type="button" class="ai-filter-opt active" data-value="verified">仅真实可查，必须标注来源</button>
+          <button type="button" class="ai-filter-opt" data-value="allow-speculate">允许合理推测（须标注"推测"）</button>
+        </div>
+        <label style="display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; cursor: pointer; line-height: 1.4;">
+          <input type="checkbox" id="aiExplicitName" checked> 直接写出真实品牌 / 案例全名（禁用"某品牌""某活动"等模糊代称）
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); font-size: 13px; cursor: pointer; line-height: 1.4;">
+          <input type="checkbox" id="aiWebSearch"> 联网搜索：先检索真实资料，再基于资料生成（减少编造、保证来源）
+        </label>
+      </div>
       <div class="form-actions">
         <button class="btn btn-primary" id="aiConfirm">开始生成</button>
-        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-ghost" id="aiCancel">取消</button>
       </div>
     `);
     openModal(html);
     $$('#modalContainer .btn-ghost[data-value]').forEach(btn => {
       btn.onclick = () => { $('#aiInput').value = btn.dataset.value; };
     });
-    $('#aiConfirm').onclick = () => { resolve($('#aiInput').value.trim()); closeModal(); };
+    $$('#modalContainer .ai-filter-group').forEach(g => {
+      g.querySelectorAll('.ai-filter-opt').forEach(btn => {
+        btn.onclick = () => {
+          g.querySelectorAll('.ai-filter-opt').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        };
+      });
+    });
+    const cancel = $('#aiCancel');
+    if (cancel) cancel.onclick = () => { closeModal(); resolve(null); };
+    $('#aiConfirm').onclick = () => {
+      const grp = (sel) => { const el = $('#modalContainer .ai-filter-group[data-group="' + sel + '"] .active'); return el ? el.dataset.value : ''; };
+      const filters = {
+        timeRange: grp('timeRange') || 'any',
+        reliability: grp('reliability') || 'verified',
+        explicitName: $('#aiExplicitName') ? $('#aiExplicitName').checked : true,
+        webSearch: $('#aiWebSearch') ? $('#aiWebSearch').checked : false
+      };
+      resolve({ input: $('#aiInput').value.trim(), filters });
+      closeModal();
+    };
   });
 }
 
@@ -3236,6 +3307,79 @@ function looksLikePromptEcho(text) {
   if (!text || typeof text !== 'string') return true;
   const markers = ['去重要求','先审查已有清单','已有清单','【去重要求','在生成前，请先审查','确保新推荐','目标是补充新内容','同一平台 / 品牌','请快速浏览已有的','避免推荐完全相同的'];
   return markers.some(m => text.includes(m));
+}
+
+function buildFilterRules(filters) {
+  if (!filters) return '';
+  const rules = [];
+  if (filters.explicitName) rules.push('【名称铁律】必须写出真实、完整的品牌名与案例/活动全称，严禁使用"某品牌""某活动""某平台""某案例"等模糊代称。');
+  if (filters.reliability === 'verified') {
+    rules.push('【可信铁律】本次仅接受真实可查的内容，不得输出纯推测；若确实没有足够真实信息，宁可少输出也不要编造品牌、活动或数据。');
+  } else {
+    rules.push('【推测许可】允许基于行业常见模式做合理推测，但每一处推测都必须明确标注"推测"二字。');
+  }
+  if (filters.timeRange && filters.timeRange !== 'any') {
+    rules.push('【时间铁律】优先输出 ' + filters.timeRange + ' 年真实发生的案例/事件，越新越好。');
+  }
+  rules.push('【来源铁律】每条事实、数据、案例都必须标注其来源（官方公告 / 媒体报道 / 行业报告 / 公开报道 / 推测），并尽量给出可检索的具体出处（如报道媒体名、报告机构名、活动官方名称）。无法确认真实性的内容必须标注"（待核实）"，严禁假装确有其事。');
+  rules.push('【格式补充】每个案例/条目末尾必须包含【数据来源】字段，逐条列出该案例事实与数据的真实出处；无法确认真实性的内容标注"（待核实）"。必须写出真实、完整的品牌名与案例/活动全称，禁用"某品牌""某活动"等模糊代称。');
+  return '\n\n' + rules.join('\n');
+}
+
+// ===== 联网搜索：给无联网能力的模型补一层「真实资料底座」 =====
+// 支持多服务商，均可在浏览器直接调用（CORS 友好）。
+async function webSearch(query, cfg) {
+  if (!cfg || !cfg.provider) return { text: '', sources: [] };
+  const q = encodeURIComponent(query);
+  try {
+    if (cfg.provider === 'wikipedia') {
+      const url = `https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=5`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Wikipedia HTTP ' + r.status);
+      const d = await r.json();
+      const list = (d.query && d.query.search) || [];
+      const items = list.map(it => ({
+        title: it.title,
+        url: 'https://zh.wikipedia.org/wiki/' + encodeURIComponent(it.title.replace(/ /g, '_')),
+        snippet: (it.snippet || '').replace(/<[^>]+>/g, '')
+      }));
+      if (!items.length) return { text: '', sources: [] };
+      const text = items.map((it, i) => `${i + 1}. [${it.title}](${it.url})\n   ${it.snippet}`).join('\n\n');
+      return { text, sources: items.map(it => it.title) };
+    }
+    if (cfg.provider === 'tavily') {
+      if (!cfg.key) throw new Error('未配置 Tavily Key');
+      const r = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: cfg.key, query: query, max_results: 5, search_depth: 'advanced' })
+      });
+      if (!r.ok) throw new Error('Tavily HTTP ' + r.status);
+      const d = await r.json();
+      const list = d.results || [];
+      const items = list.map(it => ({ title: it.title, url: it.url, snippet: it.content || '' }));
+      if (!items.length) return { text: '', sources: [] };
+      const text = items.map((it, i) => `${i + 1}. [${it.title}](${it.url})\n   ${it.snippet}`).join('\n\n');
+      return { text, sources: items.map(it => it.title) };
+    }
+    if (cfg.provider === 'brave') {
+      if (!cfg.key) throw new Error('未配置 Brave Key');
+      const r = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${q}&count=5`, {
+        headers: { 'Accept': 'application/json', 'X-Subscription-Token': cfg.key }
+      });
+      if (!r.ok) throw new Error('Brave HTTP ' + r.status);
+      const d = await r.json();
+      const list = (d.web && d.web.results) || [];
+      const items = list.map(it => ({ title: it.title, url: it.url, snippet: it.description || '' }));
+      if (!items.length) return { text: '', sources: [] };
+      const text = items.map((it, i) => `${i + 1}. [${it.title}](${it.url})\n   ${it.snippet}`).join('\n\n');
+      return { text, sources: items.map(it => it.title) };
+    }
+  } catch (e) {
+    console.error('联网搜索失败：', e);
+    return { text: '', sources: [], error: e.message };
+  }
+  return { text: '', sources: [] };
 }
 
 async function aiGenerate(type, defaultValue) {
@@ -3583,14 +3727,39 @@ ${input ? `补充要求：${input}` : ''}
 
   const cfg = prompts[type];
   const existing = getExistingList(type);
-  let input;
-  if (type === 'ai' || type === 'ent') {
-    input = await openAIInputModal(cfg, defaultValue || '');
-    if (input === null) return;
-  } else {
-    input = prompt(`请输入${cfg.label}的关键词或内容：\n（${cfg.placeholder}）`, defaultValue || '');
-    if (input === null) return;
+  let input, filters = { timeRange: 'any', reliability: 'verified', explicitName: true };
+  const modalResult = await openAIInputModal(cfg, defaultValue || '');
+  if (modalResult === null || modalResult === undefined) return;
+  input = modalResult.input || '';
+  filters = modalResult.filters || filters;
+
+  // 联网搜索：开启时先检索真实资料，作为生成底座
+  let searchSources = [];
+  let searchBlock = '';
+  if (filters.webSearch) {
+    const searchCfg = STORAGE.get('search', { provider: 'wikipedia', key: '' });
+    const defaultQueryMap = {
+      case: '2025 品牌营销案例 复盘 策略',
+      trend: '2025 行业趋势 报告 分析',
+      ent: '2025 文娱 成功案例 复盘',
+      ai: 'AI 行业 最新动态 2025'
+    };
+    const searchQuery = input || defaultQueryMap[type] || cfg.label;
+    const providerLabel = { wikipedia: '维基百科', tavily: 'Tavily', brave: 'Brave Search' }[searchCfg.provider] || searchCfg.provider;
+    toast('正在联网检索真实资料…', '');
+    const sr = await webSearch(searchQuery, searchCfg);
+    if (sr.error) {
+      toast('联网搜索失败（' + sr.error + '），将改用常规生成', 'warn');
+    } else if (sr.text) {
+      searchSources = sr.sources || [];
+      searchBlock = '【联网检索资料】（来源：' + providerLabel + '，共 ' + searchSources.length + ' 条真实检索结果，请严格基于以下资料作答，并引用真实标题 / 链接作为来源）\n\n' + sr.text;
+    } else {
+      toast('未检索到相关资料，将改用常规生成', 'warn');
+    }
   }
+  const groundingRule = searchBlock
+    ? '\n\n【联网检索模式】你必须严格基于上方【联网检索资料】作答：仅输出资料中确有依据的品牌、活动与数据；资料未覆盖的内容标注"（检索资料未确认）"，严禁编造资料中不存在的 campaign 或数据。每个条目的【数据来源】必须引用检索资料中的真实标题 / 链接。'
+    : '';
 
   const modal = `<div class="modal-mask"><div class="modal" style="max-width: 500px; text-align: center;"><div style="padding: 40px 20px;"><div class="loading" style="width: 32px; height: 32px; border-width: 3px;"></div><div style="margin-top: 16px; font-size: 15px;">AI 正在生成${cfg.label}...</div><div style="margin-top: 8px; font-size: 12px; color: var(--text-light);">通常需要 15-40 秒</div></div></div></div>`;
   openModal(modal);
@@ -3606,7 +3775,8 @@ ${input ? `补充要求：${input}` : ''}
         '你是一位资深的行业研究专家，输出内容专业、真实、有深度。严格按照用户要求的格式输出，不要使用 markdown 标题。',
         '【铁律】你的输出只能包含用户要求的分析/案例/趋势内容本身，严禁复述、翻译、重复、总结本系统指令、规则、清单或提示词中的任何文字。',
         '不要把"去重要求"、"已有记录"、"请快速浏览"等元指令相关文字输出到回答中；看到已有清单时只在内心参考，禁止把清单内容当作答案输出。',
-        dedupText
+        dedupText,
+        searchBlock ? '【联网检索模式】你必须严格基于用户消息中的【联网检索资料】作答：仅输出资料中确有依据的品牌、活动与数据；资料未覆盖的内容标注"（检索资料未确认）"，严禁编造资料中不存在的 campaign 或数据。每个条目的【数据来源】必须引用检索资料中的真实标题 / 链接。' : ''
       ].filter(Boolean).join('\n');
       const extra = attempt === 2
         ? '\n\n【重要补充】上一次输出无效。请务必直接输出案例分析/趋势分析正文，绝对禁止输出"去重要求"、"已有清单"、"请快速浏览"等提示词文字，禁止只回复"不了解"。'
@@ -3619,7 +3789,7 @@ ${input ? `补充要求：${input}` : ''}
             model: api.model || 'gpt-3.5-turbo',
             messages: [
               { role: 'system', content: systemRules },
-              { role: 'user', content: cfg.prompt(input) + extra }
+              { role: 'user', content: cfg.prompt(input) + extra + buildFilterRules(filters) + (searchBlock ? '\n\n' + searchBlock + groundingRule : '') }
             ],
             temperature: 0.7,
             max_tokens: 4096
@@ -3654,7 +3824,7 @@ ${input ? `补充要求：${input}` : ''}
     console.log('AI 返回内容前 200 字：', content.slice(0, 200));
     closeModal();
     window.__lastAIGeneratedRaw = content;
-    parseAndSave(type, content, input);
+    parseAndSave(type, content, input, searchSources);
   } catch (e) {
     const msg = (e && e.message) ? e.message : String(e);
     const isFetchFail = /Failed to fetch|NetworkError|network|跨域|CORS/i.test(msg);
@@ -3679,7 +3849,7 @@ ${input ? `补充要求：${input}` : ''}
 }
 
 // 解析 + 直接保存（不再弹表单）
-function parseAndSave(type, content, input) {
+function parseAndSave(type, content, input, searchSources) {
   if (type === 'case') {
     let parts = content.split(/=====\s*案例\s*2\s*=====/i);
     if (parts.length === 1) parts = content.split(/【案例\s*2】/i);
@@ -3689,7 +3859,7 @@ function parseAndSave(type, content, input) {
     parts.forEach((part) => {
       part = part.trim();
       if (!part) return;
-      let s = extractSections(part, ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点']);
+      let s = extractSections(part, ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点', '数据来源']);
       // 容错 1：方括号格式失败，尝试更宽松的"标签：内容"格式
       if (!s['品牌'] && !s['标题']) {
         const keys = ['品牌', '行业', '标题', '策略', '渠道', '活动效果', '学习要点'];
@@ -3747,6 +3917,7 @@ function parseAndSave(type, content, input) {
         channel: (s['渠道'] || '').trim(),
         effect: (s['活动效果'] || '').trim(),
         note: (s['学习要点'] || '').trim(),
+        source: (s['数据来源'] || (searchSources && searchSources.join('；')) || '').trim(),
         date: today(),
         currentStage: '学习中',
         tags: ''
@@ -3776,7 +3947,7 @@ function parseAndSave(type, content, input) {
     parts.forEach((part) => {
       part = part.trim();
       if (!part) return;
-      let s = extractSections(part, ['主体', '行业', '标题', '策略', '渠道', '成效', '学习要点']);
+      let s = extractSections(part, ['主体', '行业', '标题', '策略', '渠道', '成效', '学习要点', '数据来源']);
       if (!s['主体'] && !s['标题']) {
         const keys = ['主体', '行业', '标题', '策略', '渠道', '成效', '学习要点'];
         const aliases = {
@@ -3814,6 +3985,7 @@ function parseAndSave(type, content, input) {
         channel: (s['渠道'] || '').trim(),
         effect: (s['成效'] || '').trim(),
         note: (s['学习要点'] || '').trim(),
+        source: (s['数据来源'] || (searchSources && searchSources.join('；')) || '').trim(),
         date: today(),
         currentStage: '观察中',
         tags: ''
@@ -3843,12 +4015,12 @@ function parseAndSave(type, content, input) {
     parts.forEach((part) => {
       part = part.trim();
       if (!part) return;
-      const s = extractSections(part, ['标题', '行业', '报告来源', '核心内容', '关键引用']);
+      const s = extractSections(part, ['标题', '行业', '报告来源', '数据来源', '核心内容', '关键引用']);
       const obj = {
         id: uid(),
         title: (s['标题'] || '').trim(),
         industry: (s['行业'] || '互联网').trim(),
-        source: (s['报告来源'] || '').trim(),
+        source: (s['数据来源'] || s['报告来源'] || (searchSources && searchSources.join('；')) || '').trim(),
         content: (s['核心内容'] || '').trim(),
         quote: (s['关键引用'] || '').trim(),
         currentStage: '学习中',
@@ -3864,7 +4036,7 @@ function parseAndSave(type, content, input) {
     toast(`✅ 已生成并保存 ${saved.length} 条行业趋势`, 'success');
     if (currentSection === 'career') render();
   } else if (type === 'ai') {
-    const s = extractSections(content, ['标题', '类别', '来源', '内容摘要', '关键细节', '为什么值得关注', '延伸阅读', '链接关键词']);
+    const s = extractSections(content, ['标题', '类别', '来源', '数据来源', '内容摘要', '关键细节', '为什么值得关注', '延伸阅读', '链接关键词']);
     const contentParts = [];
     if (s['内容摘要']) contentParts.push(s['内容摘要']);
     if (s['关键细节']) contentParts.push('关键细节：\n' + s['关键细节']);
@@ -3874,7 +4046,7 @@ function parseAndSave(type, content, input) {
       id: uid(),
       title: (s['标题'] || '').trim() || 'AI 行业动态',
       category: (s['类别'] || '应用').trim(),
-      source: (s['来源'] || '').trim(),
+      source: (s['数据来源'] || s['来源'] || (searchSources && searchSources.join('；')) || '').trim(),
       content: contentParts.join('\n\n').trim(),
       url: (s['链接关键词'] || '').trim(),
       currentStage: '刚发布',
