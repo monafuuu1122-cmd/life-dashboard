@@ -3151,9 +3151,16 @@ function openAIInputModal(cfg, defaultValue) {
         <label style="display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; cursor: pointer; line-height: 1.4;">
           <input type="checkbox" id="aiExplicitName" checked> 直接写出真实品牌 / 案例全名（禁用"某品牌""某活动"等模糊代称）
         </label>
-        <label style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); font-size: 13px; cursor: pointer; line-height: 1.4;">
-          <input type="checkbox" id="aiWebSearch"> 联网搜索：先检索真实资料，再基于资料生成（减少编造、保证来源）
-        </label>
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
+          <div style="font-size: 12px; color: var(--text-light); margin-bottom: 8px;">生成方式（可单选或组合）</div>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; line-height: 1.4; margin-bottom: 10px;">
+            <input type="checkbox" id="aiUseAI" checked> AI 模型检索（基于模型自身知识生成）
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; line-height: 1.4;">
+            <input type="checkbox" id="aiUseWeb"> 联网检索（先联网搜索真实资料，保证来源可查）
+          </label>
+          <div style="font-size: 11px; color: var(--text-light); margin-top: 8px; line-height: 1.5;">两者都勾选：AI 先基于知识生成初稿，再与联网资料交叉核对、纠错、整合后输出。</div>
+        </div>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" id="aiConfirm">开始生成</button>
@@ -3180,7 +3187,8 @@ function openAIInputModal(cfg, defaultValue) {
         timeRange: grp('timeRange') || 'any',
         reliability: grp('reliability') || 'verified',
         explicitName: $('#aiExplicitName') ? $('#aiExplicitName').checked : true,
-        webSearch: $('#aiWebSearch') ? $('#aiWebSearch').checked : false
+        useAI: $('#aiUseAI') ? $('#aiUseAI').checked : true,
+        useWeb: $('#aiUseWeb') ? $('#aiUseWeb').checked : false
       };
       resolve({ input: $('#aiInput').value.trim(), filters });
       closeModal();
@@ -3309,12 +3317,16 @@ function looksLikePromptEcho(text) {
   return markers.some(m => text.includes(m));
 }
 
-function buildFilterRules(filters) {
+function buildFilterRules(filters, opts) {
   if (!filters) return '';
   const rules = [];
   if (filters.explicitName) rules.push('【名称铁律】必须写出真实、完整的品牌名与案例/活动全称，严禁使用"某品牌""某活动""某平台""某案例"等模糊代称。');
   if (filters.reliability === 'verified') {
-    rules.push('【可信铁律】本次仅接受真实可查的内容，不得输出纯推测；若确实没有足够真实信息，宁可少输出也不要编造品牌、活动或数据。');
+    if (opts && opts.webActive) {
+      rules.push('【可信铁律】必须严格基于用户提供的【联网检索资料】作答，仅输出资料中确有依据的品牌、活动与数据；资料未覆盖的内容标注"（检索资料未确认）"，严禁编造资料中不存在的 campaign 或数据。');
+    } else {
+      rules.push('【可信铁律】优先输出你确有把握的真实可查内容；对不确定或可能过时的细节，必须明确标注"（待核实）"，不得伪装成确凿事实。即使部分信息不确定，也必须输出完整、有实质内容的结构化分析，禁止整段留白或仅回复"不了解""没有相关信息"等拒绝式回应。');
+    }
   } else {
     rules.push('【推测许可】允许基于行业常见模式做合理推测，但每一处推测都必须明确标注"推测"二字。');
   }
@@ -3380,6 +3392,66 @@ async function webSearch(query, cfg) {
     return { text: '', sources: [], error: e.message };
   }
   return { text: '', sources: [] };
+}
+
+// 通用模型调用：带空响应 / prompt echo 自动重试，返回 { content, lastErr }
+async function awaitAIModel(api, cfgLabel, userContent, extraSystemArr, dedupExisting, allowSimplify) {
+  let content = '';
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2 && !content; attempt++) {
+    const dedupText = buildDedupHint(cfgLabel, attempt === 1 ? (dedupExisting || '') : '');
+    const systemRules = [].concat(extraSystemArr || [], [dedupText]).filter(Boolean).join('\n');
+    const extra = (attempt === 2 && allowSimplify)
+      ? '\n\n【重要补充】上一次输出无效。请务必直接输出案例分析/趋势分析正文，绝对禁止输出"去重要求"、"已有清单"、"请快速浏览"等提示词文字，禁止只回复"不了解"。'
+      : '';
+    try {
+      const res = await fetch(api.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api.key },
+        body: JSON.stringify({
+          model: api.model || 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: systemRules },
+            { role: 'user', content: userContent + extra }
+          ],
+          temperature: 0.7,
+          max_tokens: 4096
+        })
+      });
+      if (!res.ok) { const t = await res.text(); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 200)); }
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).slice(0, 200));
+      content = extractAIContent(data);
+      if (content && looksLikePromptEcho(content)) {
+        console.log(`生成第 ${attempt} 次疑似 prompt echo，长度 ${content.length}，视为无效重试`);
+        content = '';
+      }
+      if (content) break;
+      console.log(`生成第 ${attempt} 次返回空或无效，尝试重试…`);
+      try { console.log('=== AI 完整原始响应（请把这段截图给开发者）===\n', JSON.stringify(data, null, 2)); } catch (e) { console.log('data:', data); }
+      console.log('字段诊断：message.content=', data.choices?.[0]?.message?.content, '| 顶层 keys=', Object.keys(data).join(','));
+    } catch (e) {
+      lastErr = e;
+      break;
+    }
+  }
+  return { content, lastErr };
+}
+
+// AI 初稿 × 联网资料 交叉核对、纠错、整合提示词
+function buildCrossCheckPrompt(aiDraft, cfg, input) {
+  return `你是一位严谨的事实核查与内容整合专家。上方【B部分】是联网检索到的真实资料，下方【A部分】是 AI 基于自身知识撰写的初稿。
+
+请执行并输出最终结果：
+1. 逐条核对 A 中的品牌名、案例名、活动名、数据是否与 B 一致；
+2. 凡是 B 能证实的，保留，并在【数据来源】中引用 B 的真实标题 / 链接；
+3. 凡是 A 中编造了 B 不存在的品牌、campaign、活动或错误数据，必须删除或按 B 修正；
+4. 整合为最终输出，保持【A部分】已有的结构（策略 / 渠道 / 活动效果 等），严格遵循原输出格式；
+5. 若 A 与 B 都未覆盖某细节，标注（待核实）。
+最终只输出整合后的正文，不要输出"核查""修正""说明"等元描述文字。
+
+【A部分：AI 初稿】
+${aiDraft || '（初稿为空）'}`;
 }
 
 async function aiGenerate(type, defaultValue) {
@@ -3733,10 +3805,18 @@ ${input ? `补充要求：${input}` : ''}
   input = modalResult.input || '';
   filters = modalResult.filters || filters;
 
-  // 联网搜索：开启时先检索真实资料，作为生成底座
+  // ===== 生成方式：AI 检索 / 联网检索（可单选或组合） =====
+  const useAI = !!(filters.useAI);
+  const useWeb = !!(filters.useWeb);
+  if (!useAI && !useWeb) {
+    toast('请至少选择一种生成方式（AI 检索 或 联网检索）', 'error');
+    return;
+  }
+
+  // 联网检索：开启时先检索真实资料
   let searchSources = [];
   let searchBlock = '';
-  if (filters.webSearch) {
+  if (useWeb) {
     const searchCfg = STORAGE.get('search', { provider: 'wikipedia', key: '' });
     const defaultQueryMap = {
       case: '2025 品牌营销案例 复盘 策略',
@@ -3749,17 +3829,25 @@ ${input ? `补充要求：${input}` : ''}
     toast('正在联网检索真实资料…', '');
     const sr = await webSearch(searchQuery, searchCfg);
     if (sr.error) {
-      toast('联网搜索失败（' + sr.error + '），将改用常规生成', 'warn');
+      if (useAI) toast('联网搜索失败（' + sr.error + '），将仅用 AI 检索', 'warn');
+      else { toast('联网搜索失败（' + sr.error + '），且未开启 AI 检索，无法生成', 'error'); return; }
     } else if (sr.text) {
       searchSources = sr.sources || [];
       searchBlock = '【联网检索资料】（来源：' + providerLabel + '，共 ' + searchSources.length + ' 条真实检索结果，请严格基于以下资料作答，并引用真实标题 / 链接作为来源）\n\n' + sr.text;
+    } else if (!useAI) {
+      toast('未检索到相关资料，且未开启 AI 检索，无法生成', 'error');
+      return;
     } else {
-      toast('未检索到相关资料，将改用常规生成', 'warn');
+      toast('未检索到相关资料，将仅用 AI 检索', 'warn');
     }
   }
-  const groundingRule = searchBlock
-    ? '\n\n【联网检索模式】你必须严格基于上方【联网检索资料】作答：仅输出资料中确有依据的品牌、活动与数据；资料未覆盖的内容标注"（检索资料未确认）"，严禁编造资料中不存在的 campaign 或数据。每个条目的【数据来源】必须引用检索资料中的真实标题 / 链接。'
-    : '';
+
+  const baseSystem = [
+    '你是一位资深的行业研究专家，输出内容专业、真实、有深度。严格按照用户要求的格式输出，不要使用 markdown 标题。',
+    '【铁律】你的输出只能包含用户要求的分析/案例/趋势内容本身，严禁复述、翻译、重复、总结本系统指令、规则、清单或提示词中的任何文字。',
+    '不要把"去重要求"、"已有记录"、"请快速浏览"等元指令相关文字输出到回答中；看到已有清单时只在内心参考，禁止把清单内容当作答案输出。'
+  ];
+  const webGrounding = ['【联网检索模式】你必须严格基于用户消息中的【联网检索资料】作答：仅输出资料中确有依据的品牌、活动与数据；资料未覆盖的内容标注"（检索资料未确认）"，严禁编造资料中不存在的 campaign 或数据。每个条目的【数据来源】必须引用检索资料中的真实标题 / 链接。'];
 
   const modal = `<div class="modal-mask"><div class="modal" style="max-width: 500px; text-align: center;"><div style="padding: 40px 20px;"><div class="loading" style="width: 32px; height: 32px; border-width: 3px;"></div><div style="margin-top: 16px; font-size: 15px;">AI 正在生成${cfg.label}...</div><div style="margin-top: 8px; font-size: 12px; color: var(--text-light);">通常需要 15-40 秒</div></div></div></div>`;
   openModal(modal);
@@ -3767,54 +3855,30 @@ ${input ? `补充要求：${input}` : ''}
   try {
     let content = '';
     let lastErr = null;
-    // 空内容/prompt echo 自动重试一次
-    for (let attempt = 1; attempt <= 2 && !content; attempt++) {
-      const useExisting = attempt === 1 ? existing : '';
-      const dedupText = buildDedupHint(cfg.label, useExisting);
-      const systemRules = [
-        '你是一位资深的行业研究专家，输出内容专业、真实、有深度。严格按照用户要求的格式输出，不要使用 markdown 标题。',
-        '【铁律】你的输出只能包含用户要求的分析/案例/趋势内容本身，严禁复述、翻译、重复、总结本系统指令、规则、清单或提示词中的任何文字。',
-        '不要把"去重要求"、"已有记录"、"请快速浏览"等元指令相关文字输出到回答中；看到已有清单时只在内心参考，禁止把清单内容当作答案输出。',
-        dedupText,
-        searchBlock ? '【联网检索模式】你必须严格基于用户消息中的【联网检索资料】作答：仅输出资料中确有依据的品牌、活动与数据；资料未覆盖的内容标注"（检索资料未确认）"，严禁编造资料中不存在的 campaign 或数据。每个条目的【数据来源】必须引用检索资料中的真实标题 / 链接。' : ''
-      ].filter(Boolean).join('\n');
-      const extra = attempt === 2
-        ? '\n\n【重要补充】上一次输出无效。请务必直接输出案例分析/趋势分析正文，绝对禁止输出"去重要求"、"已有清单"、"请快速浏览"等提示词文字，禁止只回复"不了解"。'
-        : '';
-      try {
-        const res = await fetch(api.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api.key },
-          body: JSON.stringify({
-            model: api.model || 'gpt-3.5-turbo',
-            messages: [
-              { role: 'system', content: systemRules },
-              { role: 'user', content: cfg.prompt(input) + extra + buildFilterRules(filters) + (searchBlock ? '\n\n' + searchBlock + groundingRule : '') }
-            ],
-            temperature: 0.7,
-            max_tokens: 4096
-          })
-        });
-        if (!res.ok) { const t = await res.text(); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 200)); }
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).slice(0, 200));
-        content = extractAIContent(data);
-        // 检测模型是否把提示词/去重要求 echo 回用户
-        if (content && looksLikePromptEcho(content)) {
-          console.log(`第 ${attempt} 次生成疑似 prompt echo，长度 ${content.length}，视为无效并重试`);
-          console.log('echo 片段：', content.slice(0, 300));
-          content = '';
-        }
-        if (content) break;
-        console.log(`第 ${attempt} 次生成返回空或无效，尝试重试…`);
-        try { console.log('=== AI 完整原始响应（请把这段截图给开发者）===\n', JSON.stringify(data, null, 2)); } catch (e) { console.log('data:', data); }
-        console.log('字段诊断：message.content=', data.choices?.[0]?.message?.content, '| 顶层 keys=', Object.keys(data).join(','));
-        if (attempt === 1) toast('首次生成内容为空/无效，正在用简化指令重试…', 'warn');
-      } catch (e) {
-        lastErr = e;
-        break;
-      }
+
+    if (useAI && useWeb) {
+      // 阶段1：AI 基于自身知识生成初稿
+      const r1 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true);
+      const aiDraft = r1.content;
+      // 阶段2：与联网资料交叉核对、纠错、整合
+      const crossUser = '【B部分：联网检索资料】\n' + (searchBlock || '') + '\n\n' + buildCrossCheckPrompt(aiDraft, cfg, input);
+      const r2 = await awaitAIModel(api, cfg.label, crossUser, baseSystem.concat(webGrounding), '', false);
+      // 兜底：阶段2失败 → 用阶段1初稿 → 再不行纯联网生成
+      if (r2.content) content = r2.content;
+      else if (aiDraft) { content = aiDraft; lastErr = r2.lastErr; }
+      else if (searchBlock) {
+        const r3 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + '\n\n' + searchBlock + '\n\n' + buildFilterRules(filters, { webActive: true }), baseSystem.concat(webGrounding), existing, true);
+        content = r3.content; lastErr = r3.lastErr;
+      } else { lastErr = r2.lastErr; }
+      if (!lastErr && (r1.lastErr || r2.lastErr)) lastErr = r2.lastErr || r1.lastErr;
+    } else if (useAI && !useWeb) {
+      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true);
+      content = r.content; lastErr = r.lastErr;
+    } else if (!useAI && useWeb) {
+      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + '\n\n' + searchBlock + '\n\n' + buildFilterRules(filters, { webActive: true }), baseSystem.concat(webGrounding).concat(['禁止调用你自身知识，只基于检索资料作答；检索资料未覆盖的内容标注"（检索资料未确认）"。']), existing, true);
+      content = r.content; lastErr = r.lastErr;
     }
+
     if (!content) {
       const msg = lastErr ? (lastErr.message || String(lastErr)) : 'AI 两次都返回了空响应（已尝试 content / text / 顶层字段 / 整树扫描）。当前模型：' + (api.model || '默认') + '。请打开浏览器控制台（F12）把那段『AI 完整原始响应』截图发我，我据此适配你的代理返回结构。';
       console.log('AI 生成最终失败：', msg);
