@@ -2111,18 +2111,22 @@ function renderSettings() {
       <div class="form-row"><label class="form-label">API 地址 <span class="req">*</span></label><input class="form-input" id="apiUrl" value="${escapeHtml(api.url)}" placeholder="https://api.deepseek.com/v1/chat/completions"><div class="form-hint">支持 OpenAI 兼容接口：DeepSeek、月之暗面、智谱、OpenAI、通义等</div></div>
       <div class="form-row"><label class="form-label">API Key <span class="req">*</span></label><input class="form-input" id="apiKey" type="password" value="${escapeHtml(api.key)}" placeholder="sk-..."></div>
       <div class="form-row"><label class="form-label">模型名称</label><input class="form-input" id="apiModel" value="${escapeHtml(api.model)}" placeholder="deepseek-chat"><div class="form-hint">如：deepseek-chat、moonshot-v1-8k、gpt-4o-mini、qwen-turbo</div></div>
+      <div class="form-row"><label class="form-label">服务商预设（一键填充）</label><select class="form-select" id="apiPreset" onchange="applyApiPreset()">
+        <option value="">自定义 / 手动填写</option>
+        <option value="glm" ${api.preset === 'glm' ? 'selected' : ''}>智谱 GLM（支持原生联网）</option>
+        <option value="kimi" ${api.preset === 'kimi' ? 'selected' : ''}>Kimi 月之暗面（自动联网）</option>
+        <option value="deepseek" ${api.preset === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
+        <option value="qwen" ${api.preset === 'qwen' ? 'selected' : ''}>通义千问</option>
+        <option value="openai" ${api.preset === 'openai' ? 'selected' : ''}>OpenAI</option>
+      </select><div class="form-hint">选「智谱 GLM」会自动填入接口与模型，并在下方勾选原生联网——AI 生成即自带实时中文联网，浏览器直连可用，无需单独搜索 API。</div></div>
+      <div class="form-row form-row-inline"><label class="form-label" style="margin:0 8px 0 0;">生成时启用模型原生联网搜索</label><input type="checkbox" id="apiNativeWeb" ${api.nativeWeb ? 'checked' : ''}></div>
+      <div class="form-hint">仅「智谱 GLM」生效（Kimi 由模型自动判断）。开启后 AI 调用会自动联网检索真实资料，与「联网检索」开关互补：前者由模型内置搜索完成，后者走独立搜索源（维基 / SearXNG 等）。</div>
       <div class="form-actions"><button class="btn btn-primary" id="saveApi">保存配置</button><button class="btn btn-ghost" id="testApi">测试连接</button></div>
     </div></div>
     <div class="settings-section"><div class="settings-section-title">联网搜索（可选 · 给 AI 加真实资料底座）</div><div class="card">
-      <div class="form-row"><label class="form-label">搜索服务</label>
-        <select class="form-input" id="searchProvider">
-          <option value="wikipedia"${searchCfg.provider === 'wikipedia' ? ' selected' : ''}>维基百科（免 Key，覆盖通用知识 / 品牌背景）</option>
-          <option value="tavily"${searchCfg.provider === 'tavily' ? ' selected' : ''}>Tavily（需 Key，最适合营销 / 新闻检索）</option>
-          <option value="brave"${searchCfg.provider === 'brave' ? ' selected' : ''}>Brave Search（需 Key，通用网页检索）</option>
-        </select>
-      </div>
-      <div class="form-row" id="searchKeyRow"><label class="form-label">搜索 API Key</label><input class="form-input" id="searchKey" type="password" value="${escapeHtml(searchCfg.key)}" placeholder="Tavily / Brave 的 Key"></div>
-      <div class="form-hint">选「维基百科」无需 Key，立即可用（通用知识够用）。Tavily / Brave 需自备 Key——Key 与 AI Key 一样存在浏览器本地，站点公开部署时请勿共用重要账号 Key。</div>
+      <div class="form-label">搜索服务（可多选，生成时并行检索并合并去重）</div>
+      <div id="searchProviders">${renderSearchProviderRows(searchCfg)}</div>
+      <div class="form-hint">维基百科、SearXNG 均免 Key 立即可用；SearXNG 聚合 Google/Bing/DDG 等真实网页，覆盖面最广（推荐勾上）。Brave 已于 2026-02 取消免费档、需付费 Key；必应在纯浏览器直连可能受跨域限制。多个源一起勾选覆盖面更广。Key 与 AI Key 一样存在浏览器本地，站点公开部署时请勿共用重要账号 Key。</div>
       <div class="form-actions"><button class="btn btn-primary" id="saveSearch">保存搜索配置</button></div>
     </div></div>
     <div class="settings-section"><div class="settings-section-title">数据备份</div><div class="card">
@@ -2354,11 +2358,6 @@ function bindEvents() {
   bind('saveApi', saveApiSettings);
   bind('testApi', testApiSettings);
   bind('saveSearch', saveSearchSettings);
-  const sp = $('#searchProvider');
-  if (sp) {
-    const syncKeyRow = () => { const row = $('#searchKeyRow'); if (row) row.style.display = sp.value === 'wikipedia' ? 'none' : ''; };
-    sp.onchange = syncKeyRow; syncKeyRow();
-  }
   bind('exportBtn', exportData);
   bind('clearAll', clearAllData);
   bind('loadDemo', loadDemoData);
@@ -3092,16 +3091,35 @@ function openTopicForm(id) {
 
 // ===== AI 生成 =====
 function saveApiSettings() {
-  const api = { url: $('#apiUrl').value.trim(), key: $('#apiKey').value.trim(), model: $('#apiModel').value.trim() };
+  const api = { url: $('#apiUrl').value.trim(), key: $('#apiKey').value.trim(), model: $('#apiModel').value.trim(), preset: $('#apiPreset').value, nativeWeb: $('#apiNativeWeb').checked };
   if (!api.url || !api.key) { toast('请填写 API 地址和 Key', 'error'); return; }
   STORAGE.set('api', api);
   toast('配置已保存', 'success');
 }
 
+function applyApiPreset() {
+  const map = {
+    glm: { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash', web: true },
+    kimi: { url: 'https://api.moonshot.cn/v1/chat/completions', model: 'moonshot-v1-8k', web: false },
+    deepseek: { url: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat', web: false },
+    qwen: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model: 'qwen-plus', web: false },
+    openai: { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini', web: false }
+  };
+  const p = $('#apiPreset').value;
+  if (!p) return;
+  const c = map[p];
+  if (!c) return;
+  $('#apiUrl').value = c.url;
+  $('#apiModel').value = c.model;
+  if (c.web) $('#apiNativeWeb').checked = true;
+}
+
 function saveSearchSettings() {
-  const provider = $('#searchProvider') ? $('#searchProvider').value : 'wikipedia';
-  const key = $('#searchKey') ? $('#searchKey').value.trim() : '';
-  STORAGE.set('search', { provider, key });
+  const providers = Array.from(document.querySelectorAll('.search-prov:checked')).map(c => c.value);
+  if (!providers.length) { toast('请至少选择一个搜索服务', 'error'); return; }
+  const keys = {};
+  document.querySelectorAll('.search-key').forEach(inp => { const v = inp.value.trim(); if (v) keys[inp.dataset.prov] = v; });
+  STORAGE.set('search', { providers, keys });
   toast('搜索配置已保存', 'success');
 }
 
@@ -3340,62 +3358,144 @@ function buildFilterRules(filters, opts) {
 
 // ===== 联网搜索：给无联网能力的模型补一层「真实资料底座」 =====
 // 支持多服务商，均可在浏览器直接调用（CORS 友好）。
-async function webSearch(query, cfg) {
-  if (!cfg || !cfg.provider) return { text: '', sources: [] };
-  const q = encodeURIComponent(query);
-  try {
-    if (cfg.provider === 'wikipedia') {
-      const url = `https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=5`;
-      const r = await fetch(url);
-      if (!r.ok) throw new Error('Wikipedia HTTP ' + r.status);
-      const d = await r.json();
-      const list = (d.query && d.query.search) || [];
-      const items = list.map(it => ({
-        title: it.title,
-        url: 'https://zh.wikipedia.org/wiki/' + encodeURIComponent(it.title.replace(/ /g, '_')),
-        snippet: (it.snippet || '').replace(/<[^>]+>/g, '')
-      }));
-      if (!items.length) return { text: '', sources: [] };
-      const text = items.map((it, i) => `${i + 1}. [${it.title}](${it.url})\n   ${it.snippet}`).join('\n\n');
-      return { text, sources: items.map(it => it.title) };
-    }
-    if (cfg.provider === 'tavily') {
-      if (!cfg.key) throw new Error('未配置 Tavily Key');
-      const r = await fetch('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: cfg.key, query: query, max_results: 5, search_depth: 'advanced' })
-      });
-      if (!r.ok) throw new Error('Tavily HTTP ' + r.status);
-      const d = await r.json();
-      const list = d.results || [];
-      const items = list.map(it => ({ title: it.title, url: it.url, snippet: it.content || '' }));
-      if (!items.length) return { text: '', sources: [] };
-      const text = items.map((it, i) => `${i + 1}. [${it.title}](${it.url})\n   ${it.snippet}`).join('\n\n');
-      return { text, sources: items.map(it => it.title) };
-    }
-    if (cfg.provider === 'brave') {
-      if (!cfg.key) throw new Error('未配置 Brave Key');
-      const r = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${q}&count=5`, {
-        headers: { 'Accept': 'application/json', 'X-Subscription-Token': cfg.key }
-      });
-      if (!r.ok) throw new Error('Brave HTTP ' + r.status);
-      const d = await r.json();
-      const list = (d.web && d.web.results) || [];
-      const items = list.map(it => ({ title: it.title, url: it.url, snippet: it.description || '' }));
-      if (!items.length) return { text: '', sources: [] };
-      const text = items.map((it, i) => `${i + 1}. [${it.title}](${it.url})\n   ${it.snippet}`).join('\n\n');
-      return { text, sources: items.map(it => it.title) };
-    }
-  } catch (e) {
-    console.error('联网搜索失败：', e);
-    return { text: '', sources: [], error: e.message };
+const SEARCH_PROVIDER_META = [
+  { id: 'wikipedia', label: '维基百科', needsKey: false, desc: '通用知识 / 品牌背景（免 Key）' },
+  { id: 'searx', label: 'SearXNG', needsKey: false, desc: '免费公共实例聚合检索（Google/Bing/DDG，免 Key）' },
+  { id: 'brave', label: 'Brave Search', needsKey: true, desc: '通用网页检索（已转付费，需付费 Key）' },
+  { id: 'bing', label: '必应 Bing', needsKey: true, desc: '中文覆盖更全（纯前端可能 CORS 失败）' },
+  { id: 'tavily', label: 'Tavily', needsKey: true, desc: '营销 / 新闻检索（免费额度需注册）' }
+];
+const SEARX_INSTANCES = [
+  'https://searx.be/search',
+  'https://searx.tiekoetter.com/search',
+  'https://searx.ninja/search',
+  'https://searx.work/search',
+  'https://search.sapti.me/search',
+  'https://searx.fmac.xyz/search'
+];
+const SEARCH_PROVIDER_LABELS = { wikipedia: '维基百科', searx: 'SearXNG', brave: 'Brave Search', bing: '必应 Bing', tavily: 'Tavily' };
+
+// 兼容新旧配置：旧 {provider,key} → 新 {providers[],keys{}}
+function normalizeSearchCfg(raw) {
+  raw = raw || {};
+  let providers;
+  if (Array.isArray(raw.providers) && raw.providers.length) {
+    providers = raw.providers.slice();
+  } else if (raw.provider) {
+    providers = [raw.provider];
+  } else {
+    providers = ['wikipedia', 'searx'];
   }
-  return { text: '', sources: [] };
+  // Brave 免费档已于 2026-02 取消；旧配置里的 brave 自动替换为免费免 Key 的 SearXNG
+  providers = providers.map(p => (p === 'brave' ? 'searx' : p));
+  if (!providers.length) providers = ['wikipedia', 'searx'];
+  return { providers, keys: raw.keys || {} };
+}
+
+function renderSearchProviderRows(cfg) {
+  const sel = (cfg.providers && cfg.providers.length) ? cfg.providers : (cfg.provider ? [cfg.provider] : ['wikipedia', 'searx']);
+  const keys = cfg.keys || (cfg.key ? { [cfg.provider]: cfg.key } : {});
+  return SEARCH_PROVIDER_META.map(p => `
+      <div style="border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:10px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;">
+          <input type="checkbox" class="search-prov" value="${p.id}" ${sel.includes(p.id) ? 'checked' : ''}> ${escapeHtml(p.label)}${p.needsKey ? '（需 Key）' : '（免 Key）'} · ${escapeHtml(p.desc)}
+        </label>
+        ${p.needsKey ? `<input class="form-input search-key" data-prov="${p.id}" type="password" value="${escapeHtml(keys[p.id] || '')}" placeholder="${escapeHtml(p.id)} 的 Key" style="margin-top:8px;">` : ''}
+      </div>`).join('');
+}
+
+// 多源并行检索 + 合并去重
+async function webSearch(query, cfg) {
+  const providers = (cfg && cfg.providers && cfg.providers.length) ? cfg.providers : ['wikipedia', 'searx'];
+  const keys = (cfg && cfg.keys) || {};
+  const q = encodeURIComponent(query);
+  const tasks = providers.map(p => fetchOneProvider(p, query, q, keys[p])
+    .then(items => ({ items }))
+    .catch(e => ({ error: p + '：' + e.message })));
+  const results = await Promise.all(tasks);
+  const items = [];
+  const errors = [];
+  const seen = new Set();
+  for (const res of results) {
+    if (res.error) { errors.push(res.error); continue; }
+    for (const it of (res.items || [])) {
+      const k = (it.title || '').trim().toLowerCase();
+      if (k && seen.has(k)) continue;
+      if (k) seen.add(k);
+      items.push(it);
+    }
+  }
+  if (!items.length) {
+    return { text: '', sources: [], error: errors.length ? errors.join('；') : '未检索到任何资料' };
+  }
+  const sliced = items.slice(0, 14);
+  const text = sliced.map((it, i) => `${i + 1}. [${it.title}](${it.url})\n   ${it.snippet}`).join('\n\n');
+  return { text, sources: sliced.map(it => it.title), errors: errors.length ? errors : undefined };
+}
+
+async function fetchOneProvider(provider, query, q, key) {
+  if (provider === 'wikipedia') {
+    const url = `https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=5`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Wikipedia HTTP ' + r.status);
+    const d = await r.json();
+    const list = (d.query && d.query.search) || [];
+    return list.map(it => ({
+      title: it.title,
+      url: 'https://zh.wikipedia.org/wiki/' + encodeURIComponent(it.title.replace(/ /g, '_')),
+      snippet: (it.snippet || '').replace(/<[^>]+>/g, '')
+    }));
+  }
+  if (provider === 'tavily') {
+    if (!key) throw new Error('未配置 Tavily Key');
+    const r = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key, query: query, max_results: 5, search_depth: 'advanced' })
+    });
+    if (!r.ok) throw new Error('Tavily HTTP ' + r.status);
+    const d = await r.json();
+    return (d.results || []).map(it => ({ title: it.title, url: it.url, snippet: it.content || '' }));
+  }
+  if (provider === 'brave') {
+    if (!key) throw new Error('未配置 Brave Key');
+    const r = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${q}&count=5`, {
+      headers: { 'Accept': 'application/json', 'X-Subscription-Token': key }
+    });
+    if (!r.ok) throw new Error('Brave HTTP ' + r.status);
+    const d = await r.json();
+    return ((d.web && d.web.results) || []).map(it => ({ title: it.title, url: it.url, snippet: it.description || '' }));
+  }
+  if (provider === 'bing') {
+    if (!key) throw new Error('未配置 Bing Key');
+    const r = await fetch(`https://api.bing.microsoft.com/v7.0/search?q=${q}&count=5&mkt=zh-CN`, {
+      headers: { 'Ocp-Apim-Subscription-Key': key }
+    });
+    if (!r.ok) throw new Error('Bing HTTP ' + r.status);
+    const d = await r.json();
+    return ((d.webPages && d.webPages.value) || []).map(it => ({ title: it.name, url: it.url, snippet: (it.snippet || '').replace(/<[^>]+>/g, '') }));
+  }
+  if (provider === 'searx') {
+    let lastErr = null;
+    for (const base of SEARX_INSTANCES) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const r = await fetch(`${base}?q=${q}&format=json&language=zh&safesearch=0`, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        const list = (d.results || []).map(it => ({ title: it.title, url: it.url, snippet: (it.content || '').replace(/<[^>]+>/g, '') }));
+        if (list.length) return list;
+      } catch (e) { lastErr = e; }
+    }
+    throw new Error('SearXNG 公共实例暂不可用（可能被跨域/网络限制）：' + (lastErr ? lastErr.message : ''));
+  }
+  throw new Error('未知搜索服务：' + provider);
 }
 
 // 通用模型调用：带空响应 / prompt echo 自动重试，返回 { content, lastErr }
-async function awaitAIModel(api, cfgLabel, userContent, extraSystemArr, dedupExisting, allowSimplify) {
+async function awaitAIModel(api, cfgLabel, userContent, extraSystemArr, dedupExisting, allowSimplify, webSearchQuery) {
   let content = '';
   let lastErr = null;
   for (let attempt = 1; attempt <= 2 && !content; attempt++) {
@@ -3405,18 +3505,22 @@ async function awaitAIModel(api, cfgLabel, userContent, extraSystemArr, dedupExi
       ? '\n\n【重要补充】上一次输出无效。请务必直接输出案例分析/趋势分析正文，绝对禁止输出"去重要求"、"已有清单"、"请快速浏览"等提示词文字，禁止只回复"不了解"。'
       : '';
     try {
+      const reqBody = {
+        model: api.model || 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: systemRules },
+          { role: 'user', content: userContent + extra }
+        ],
+        temperature: 0.7,
+        max_tokens: 4096
+      };
+      if (webSearchQuery && api.nativeWeb && /bigmodel\.cn/i.test(api.url || '')) {
+        reqBody.tools = [{ type: 'web_search', web_search: { search_result: true, search_query: String(webSearchQuery).slice(0, 200) } }];
+      }
       const res = await fetch(api.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api.key },
-        body: JSON.stringify({
-          model: api.model || 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: systemRules },
-            { role: 'user', content: userContent + extra }
-          ],
-          temperature: 0.7,
-          max_tokens: 4096
-        })
+        body: JSON.stringify(reqBody)
       });
       if (!res.ok) { const t = await res.text(); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 200)); }
       const data = await res.json();
@@ -3817,7 +3921,7 @@ ${input ? `补充要求：${input}` : ''}
   let searchSources = [];
   let searchBlock = '';
   if (useWeb) {
-    const searchCfg = STORAGE.get('search', { provider: 'wikipedia', key: '' });
+    const searchCfg = normalizeSearchCfg(STORAGE.get('search'));
     const defaultQueryMap = {
       case: '2025 品牌营销案例 复盘 策略',
       trend: '2025 行业趋势 报告 分析',
@@ -3825,7 +3929,7 @@ ${input ? `补充要求：${input}` : ''}
       ai: 'AI 行业 最新动态 2025'
     };
     const searchQuery = input || defaultQueryMap[type] || cfg.label;
-    const providerLabel = { wikipedia: '维基百科', tavily: 'Tavily', brave: 'Brave Search' }[searchCfg.provider] || searchCfg.provider;
+    const providerLabel = (searchCfg.providers || []).map(p => SEARCH_PROVIDER_LABELS[p] || p).join(' + ') || '未知';
     toast('正在联网检索真实资料…', '');
     const sr = await webSearch(searchQuery, searchCfg);
     if (sr.error) {
@@ -3858,7 +3962,7 @@ ${input ? `补充要求：${input}` : ''}
 
     if (useAI && useWeb) {
       // 阶段1：AI 基于自身知识生成初稿
-      const r1 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true);
+      const r1 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true, input);
       const aiDraft = r1.content;
       // 阶段2：与联网资料交叉核对、纠错、整合
       const crossUser = '【B部分：联网检索资料】\n' + (searchBlock || '') + '\n\n' + buildCrossCheckPrompt(aiDraft, cfg, input);
@@ -3872,7 +3976,7 @@ ${input ? `补充要求：${input}` : ''}
       } else { lastErr = r2.lastErr; }
       if (!lastErr && (r1.lastErr || r2.lastErr)) lastErr = r2.lastErr || r1.lastErr;
     } else if (useAI && !useWeb) {
-      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true);
+      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true, input);
       content = r.content; lastErr = r.lastErr;
     } else if (!useAI && useWeb) {
       const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + '\n\n' + searchBlock + '\n\n' + buildFilterRules(filters, { webActive: true }), baseSystem.concat(webGrounding).concat(['禁止调用你自身知识，只基于检索资料作答；检索资料未覆盖的内容标注"（检索资料未确认）"。']), existing, true);
