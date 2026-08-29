@@ -800,6 +800,66 @@ input[list]::-webkit-calendar-picker-indicator { display: none; }
   .kanban-column { flex: 0 0 220px; min-width: 220px; }
   .kanban-board { padding-bottom: 80px; }
 }
+
+/* ===== 每周日程 ===== */
+.weekly-wrap { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.wk-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.wk-cal-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.wk-cal-m-en { font-size: 26px; font-weight: 600; color: var(--text); line-height: 1.1; }
+.wk-cal-m-cn { font-size: 12px; font-weight: 500; color: var(--blue-dark); margin-top: 2px; }
+.wk-cal-cat { width: 104px; flex-shrink: 0; }
+.wk-cal-cat svg { width: 100%; height: auto; display: block; }
+.wk-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.wk-cal-h { text-align: center; font-size: 11px; font-weight: 500; color: var(--text-light); padding: 4px 0; }
+.wk-cal-cell { position: relative; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: var(--text); border-radius: 8px; cursor: pointer; transition: background 0.15s; }
+.wk-cal-cell:hover { background: var(--blue-light); }
+.wk-cal-cell.empty { cursor: default; }
+.wk-cal-cell.empty:hover { background: none; }
+.wk-cal-cell.wk-has-task::after { content: ''; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--blue-dark); }
+.wk-cal-cell.wk-today { color: var(--red); font-weight: 700; }
+.wk-cal-cell.wk-in-week { background: rgba(168, 197, 224, 0.22); }
+.wk-marker { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wk-cal-foot { margin-top: 12px; font-size: 11px; color: var(--text-light); text-align: center; line-height: 1.6; }
+
+.wk-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.wk-nav { display: flex; gap: 6px; align-items: center; }
+.wk-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.wk-col { background: rgba(250, 246, 240, 0.6); border-radius: 10px; padding: 6px 4px 8px; min-height: 220px; display: flex; flex-direction: column; }
+.wk-col.is-today { background: rgba(245, 213, 211, 0.38); }
+.wk-col-head { text-align: center; padding: 4px 0 8px; border-bottom: 1px dashed var(--border); margin-bottom: 8px; }
+.wk-col-wd { font-size: 11px; font-weight: 500; color: var(--text-light); }
+.wk-col.is-today .wk-col-wd { color: var(--red); }
+.wk-col-date { font-size: 11px; color: #A5A5A5; margin-top: 1px; }
+.wk-col.is-today .wk-col-date { color: var(--red); }
+.wk-col-body { flex: 1; padding: 2px; border-radius: 8px; transition: background 0.15s; }
+.wk-col-body.over { background: rgba(168, 197, 224, 0.3); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.wk-add-day { width: 100%; border: none; background: none; color: var(--text-light); font-size: 16px; line-height: 1; padding: 6px 0; cursor: pointer; border-radius: 6px; }
+.wk-add-day:hover { background: var(--blue-light); color: var(--blue-dark); }
+
+.wk-task { position: relative; border-radius: 12px 10px 13px 9px / 10px 13px 9px 12px; padding: 8px 9px; margin-bottom: 8px; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: manipulation; border: 1.5px solid var(--edge); background: var(--ink); }
+.wk-task::before { content: ''; position: absolute; inset: 0; transform: translate(2px, -2px); border-radius: inherit; background: var(--mis); opacity: 0.26; z-index: 0; }
+.wk-task::after { content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 1; pointer-events: none; opacity: 0.55; background-image: radial-gradient(circle at 1px 1px, rgba(58,58,58,0.17) 0.6px, transparent 0.7px), radial-gradient(circle at 3.4px 3px, rgba(58,58,58,0.12) 0.5px, transparent 0.6px); background-size: 5px 5px, 5px 5px; }
+.wk-task > * { position: relative; z-index: 2; }
+.wk-task-ttl { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.35; word-break: break-word; }
+.wk-task-time { font-size: 11px; color: rgba(58, 58, 58, 0.62); margin-top: 2px; }
+.wk-task-note { font-size: 11px; color: rgba(58, 58, 58, 0.55); margin-top: 3px; line-height: 1.4; word-break: break-word; }
+.wk-task.done { opacity: 0.5; }
+.wk-task.done .wk-task-ttl { text-decoration: line-through; }
+.wk-task.wk-dragging { opacity: 0.32; }
+.wk-task:active { cursor: grabbing; }
+.wk-ghost { box-shadow: 0 8px 20px rgba(58, 58, 58, 0.18); transform: rotate(-1.5deg); }
+.wk-ink-pick { width: 34px; height: 26px; padding: 0; cursor: pointer; border-radius: 9px 7px 10px 6px / 6px 10px 7px 9px; border: 1.5px solid var(--edge); background: var(--ink); position: relative; overflow: hidden; }
+.wk-ink-pick::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 1px 1px, rgba(58,58,58,0.16) 0.6px, transparent 0.7px); background-size: 5px 5px; opacity: 0.6; }
+.wk-ink-pick:hover { transform: translateY(-1px); }
+@media (max-width: 900px) {
+  .weekly-wrap { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .wk-grid { display: block; }
+  .wk-col { min-height: 0; margin-bottom: 8px; }
+  .wk-col-body { min-height: 52px; }
+  .wk-cal-cat { width: 88px; }
+}
 </style>
 </head>
 <body>
@@ -858,6 +918,10 @@ input[list]::-webkit-calendar-picker-indicator { display: none; }
       <button class="nav-item" data-section="kanban">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span>优先级</span>
+      </button>
+      <button class="nav-item" data-section="weekly">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><rect x="7" y="13" width="4" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="13" width="4" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+        <span>每周日程</span>
       </button>
       <button class="nav-item" data-section="life">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
@@ -1171,6 +1235,7 @@ function render() {
   else if (currentSection === 'job') main.innerHTML = renderJob();
   else if (currentSection === 'academic') main.innerHTML = renderAcademic();
   else if (currentSection === 'kanban') main.innerHTML = renderKanban();
+  else if (currentSection === 'weekly') main.innerHTML = renderWeekly();
   else if (currentSection === 'life') main.innerHTML = renderLife();
   else if (currentSection === 'settings') main.innerHTML = renderSettings();
   bindEvents();
@@ -2267,6 +2332,378 @@ function openKanbanForm(id, defaultColumn) {
   };
 }
 
+// ===== 每周日程 =====
+const WK_INKS = {
+  blue: { main: '#378ADD', edge: '#185FA5', mis: '#5DCAA5' },
+  amber: { main: '#EF9F27', edge: '#854F0B', mis: '#378ADD' },
+  green: { main: '#1D9E75', edge: '#0F6E56', mis: '#F0997B' },
+  coral: { main: '#D85A30', edge: '#993C1D', mis: '#378ADD' }
+};
+const WK_INK_KEYS = Object.keys(WK_INKS);
+const MONTH_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_CN = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+const MONTH_FILL = ['#E8F1F8', '#F5D5D3', '#D5F0DC', '#E8F1F8', '#D5F0DC', '#F5E6C8', '#E8F1F8', '#F5E6C8', '#FAC775', '#EF9F27', '#F0997B', '#F5D5D3'];
+const MONTH_PROPS = [
+  '<g stroke="#7AA8D6" stroke-width="1.6" stroke-linecap="round"><path d="M74 77 L74 87"/><path d="M69.7 79.5 L78.3 84.5"/><path d="M78.3 79.5 L69.7 84.5"/></g>',
+  '<g><rect x="69" y="77" width="11" height="10" rx="2" fill="#D9534F" stroke="#3A3A3A" stroke-width="1.6"/><path d="M69 81 H80" stroke="#FAC775" stroke-width="1.6"/></g>',
+  '<g><circle cx="71" cy="79" r="2.6" fill="#F0997B"/><circle cx="78" cy="79" r="2.6" fill="#F0997B"/><circle cx="74.5" cy="82.5" r="2.6" fill="#F0997B"/><circle cx="74.5" cy="80" r="1.8" fill="#FAC775"/></g>',
+  '<g><path d="M74.5 77 Q78 82 74.5 86 Q71 82 74.5 77 Z" fill="#7AA8D6" stroke="#3A3A3A" stroke-width="1.4"/></g>',
+  '<g><path d="M70 86 Q74 78 80 80 Q78 86 70 86 Z" fill="#2D8659" stroke="#3A3A3A" stroke-width="1.4"/></g>',
+  '<g><path d="M69 86 A6 6 0 0 1 81 86 Z" fill="#D9534F" stroke="#3A3A3A" stroke-width="1.5"/><path d="M69 86 H81" stroke="#2D8659" stroke-width="2"/></g>',
+  '<g><path d="M70 86 L74 80 L78 86 Z" fill="#F5E6C8" stroke="#3A3A3A" stroke-width="1.4"/><circle cx="74" cy="79" r="3" fill="#F0997B" stroke="#3A3A3A" stroke-width="1.4"/></g>',
+  '<g><circle cx="74" cy="82" r="5.5" fill="#D9534F" stroke="#3A3A3A" stroke-width="1.5"/><path d="M74 76.5 L76 72 L78 76.5" fill="#2D8659"/></g>',
+  '<g><circle cx="74" cy="82" r="5.5" fill="#FAC775" stroke="#3A3A3A" stroke-width="1.5"/><path d="M71 82 H77 M74 79 V85" stroke="#854F0B" stroke-width="1.2"/></g>',
+  '<g><ellipse cx="74" cy="82" rx="6" ry="5" fill="#EF9F27" stroke="#3A3A3A" stroke-width="1.5"/><path d="M73 77 L74 74 L75 77" fill="#2D8659"/></g>',
+  '<g><path d="M74 77 L77 80 L80 78 L79 82 L77 86 L74 84 L71 86 L69 82 L68 78 L71 80 Z" fill="#D85A30" stroke="#3A3A3A" stroke-width="1.3"/></g>',
+  '<g><path d="M69 85 Q74 74 79 85 Z" fill="#D9534F" stroke="#3A3A3A" stroke-width="1.5"/><circle cx="74" cy="75" r="2.4" fill="#FFFFFF" stroke="#3A3A3A" stroke-width="1.3"/></g>'
+];
+let weekOffset = 0;
+
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+function seededRand(seed) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+  let s = h >>> 0;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+}
+function markerCircle(cx, cy, r, seed) {
+  const rnd = seededRand(seed);
+  const n = 9, pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const rr = r * (0.84 + rnd() * 0.30);
+    pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.94]);
+  }
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const m0 = mid(pts[n - 1], pts[0]);
+  let d = 'M ' + m0[0].toFixed(1) + ' ' + m0[1].toFixed(1);
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], m = mid(p, pts[(i + 1) % n]);
+    d += ' Q ' + p[0].toFixed(1) + ' ' + p[1].toFixed(1) + ' ' + m[0].toFixed(1) + ' ' + m[1].toFixed(1);
+  }
+  return d + ' Z';
+}
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  return fmtDate(d);
+}
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return fmtDate(d);
+}
+function viewedMonday() {
+  return addDays(mondayOf(today()), weekOffset * 7);
+}
+function jumpToWeek(dateStr) {
+  const diff = (new Date(mondayOf(dateStr) + 'T00:00:00') - new Date(mondayOf(today()) + 'T00:00:00')) / 86400000;
+  weekOffset = Math.round(diff / 7);
+  render();
+}
+
+function catSvg(monthIdx) {
+  const fill = MONTH_FILL[monthIdx] || '#F5E6C8';
+  const prop = MONTH_PROPS[monthIdx] || MONTH_PROPS[7];
+  return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g transform="translate(3,4)">
+<path d="M22 26 L26 6 L36 18 Q44 13 52 18 L62 6 L66 26 Q76 34 72 48 Q70 54 68 58 Q78 50 82 44 Q90 44 87 54 Q84 63 74 63 Q71 72 66 80 Q58 88 46 88 Q32 88 24 80 Q16 72 16 56 Q14 38 22 26 Z" fill="${fill}" stroke="#3A3A3A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M25 22 L27 11 L33 18 Z" fill="#F0997B" opacity="0.85"/>
+<path d="M55 18 L61 11 L63 22 Z" fill="#F0997B" opacity="0.85"/>
+<ellipse cx="46" cy="62" rx="14" ry="16" fill="#FFFFFF" opacity="0.85"/>
+<circle cx="34" cy="34" r="5.5" fill="#3A3A3A"/><circle cx="36" cy="32" r="1.8" fill="#FFFFFF"/>
+<circle cx="56" cy="34" r="5.5" fill="#3A3A3A"/><circle cx="58" cy="32" r="1.8" fill="#FFFFFF"/>
+<path d="M41.5 43 L48.5 43 L45 47 Z" fill="#F0997B"/>
+<path d="M40 48 Q45 52 50 48" fill="none" stroke="#3A3A3A" stroke-width="2" stroke-linecap="round"/>
+<path d="M22 38 Q14 37 8 38" fill="none" stroke="#3A3A3A" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M22 45 Q14 46 8 48" fill="none" stroke="#3A3A3A" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M66 38 Q72 37 77 38" fill="none" stroke="#3A3A3A" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M66 45 Q72 46 77 48" fill="none" stroke="#3A3A3A" stroke-width="1.6" stroke-linecap="round"/>
+<ellipse cx="33" cy="79" rx="9" ry="6.5" fill="#FFFFFF" stroke="#3A3A3A" stroke-width="2"/>
+<ellipse cx="57" cy="79" rx="9" ry="6.5" fill="#FFFFFF" stroke="#3A3A3A" stroke-width="2"/>
+<path d="M30 76 Q30 79 30 82" fill="none" stroke="#3A3A3A" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M36 76 Q36 79 36 82" fill="none" stroke="#3A3A3A" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M54 76 Q54 79 54 82" fill="none" stroke="#3A3A3A" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M60 76 Q60 79 60 82" fill="none" stroke="#3A3A3A" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M81 46 L81 52" stroke="#3A3A3A" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M85 48 L85 54" stroke="#3A3A3A" stroke-width="1.5" stroke-linecap="round"/>
+${prop}
+</g></svg>`;
+}
+
+function getWeeklyData() {
+  let data = STORAGE.get('weekly', null);
+  if (!data || !Array.isArray(data.tasks)) {
+    const mon = mondayOf(today());
+    data = {
+      tasks: [
+        { id: uid(), title: '晨会', time: '09:00', date: mon, ink: 'blue', note: '', done: false },
+        { id: uid(), title: '项目评审', time: '14:00', date: addDays(mon, 2), ink: 'green', note: '带上最新数据', done: false },
+        { id: uid(), title: '健身', time: '18:00', date: addDays(mon, 3), ink: 'amber', note: '', done: false },
+        { id: uid(), title: '整理本周资料', time: '', date: addDays(mon, 5), ink: 'coral', note: '示例数据，可删除', done: false }
+      ]
+    };
+    STORAGE.set('weekly', data);
+  }
+  return data;
+}
+
+function wkTaskHtml(tk) {
+  const ink = WK_INKS[tk.ink] || WK_INKS.blue;
+  return `<div class="wk-task${tk.done ? ' done' : ''}" data-id="${tk.id}" data-date="${tk.date}" style="--ink:${hexToRgba(ink.main, 0.45)};--edge:${ink.edge};--mis:${ink.mis};">
+    <div class="wk-task-ttl">${escapeHtml(tk.title)}</div>
+    ${tk.time ? `<div class="wk-task-time">${escapeHtml(tk.time)}</div>` : ''}
+    ${tk.note ? `<div class="wk-task-note">${escapeHtml(tk.note)}</div>` : ''}
+  </div>`;
+}
+
+function renderWeekly() {
+  const data = getWeeklyData();
+  const mon = viewedMonday();
+  const days = [];
+  for (let i = 0; i < 7; i++) days.push(addDays(mon, i));
+  const t = today();
+  const weekSet = {};
+  days.forEach(d => { weekSet[d] = 1; });
+  const taskCount = {};
+  data.tasks.forEach(tk => { taskCount[tk.date] = (taskCount[tk.date] || 0) + 1; });
+
+  const monDate = new Date(mon + 'T00:00:00');
+  const y = monDate.getFullYear(), m = monDate.getMonth();
+  const startDow = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+  let cal = '<div class="wk-cal-grid">';
+  ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(h => { cal += `<div class="wk-cal-h">${h}</div>`; });
+  for (let i = 0; i < startDow; i++) cal += '<div class="wk-cal-cell empty"></div>';
+  for (let dd = 1; dd <= daysInMonth; dd++) {
+    const ds = fmtDate(new Date(y, m, dd));
+    const cls = ['wk-cal-cell'];
+    if (ds === t) cls.push('wk-today');
+    if (weekSet[ds]) cls.push('wk-in-week');
+    if (taskCount[ds]) cls.push('wk-has-task');
+    let marker = '';
+    if (ds === t) {
+      const p = markerCircle(22, 22, 17, 'wkmarker' + ds);
+      marker = `<svg class="wk-marker" viewBox="0 0 44 44"><path d="${p}" fill="none" stroke="#D9534F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" transform="translate(1.8,-1.8)"/><path d="${p}" fill="none" stroke="#D9534F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/></svg>`;
+    }
+    const cnt = taskCount[ds] ? `${taskCount[ds]} 个任务` : '';
+    cal += `<div class="${cls.join(' ')}" data-cal-day="${ds}" title="${cnt}"><span>${dd}</span>${marker}</div>`;
+  }
+  cal += '</div>';
+
+  const wdNames = ['一', '二', '三', '四', '五', '六', '日'];
+  let grid = '<div class="wk-grid">';
+  days.forEach((ds, i) => {
+    const d = new Date(ds + 'T00:00:00');
+    const isToday = ds === t;
+    const list = data.tasks.filter(tk => tk.date === ds);
+    grid += `<div class="wk-col${isToday ? ' is-today' : ''}">
+      <div class="wk-col-head"><div class="wk-col-wd">${wdNames[i]}</div><div class="wk-col-date">${d.getMonth() + 1}/${d.getDate()}</div></div>
+      <div class="wk-col-body" data-day="${ds}">${list.map(tk => wkTaskHtml(tk)).join('')}</div>
+      <button class="wk-add-day" data-add-wk-day="${ds}" title="在这一天添加任务">+</button>
+    </div>`;
+  });
+  grid += '</div>';
+
+  const label = days[0].slice(5).replace('-', '.') + ' — ' + days[6].slice(5).replace('-', '.');
+  const weekTasks = data.tasks.filter(tk => weekSet[tk.date]).length;
+
+  return `<div class="section-header">
+    <svg class="section-icon" viewBox="0 0 100 100"><rect x="12" y="20" width="76" height="66" rx="8" fill="#E8F1F8" stroke="#3A3A3A" stroke-width="4"/><path d="M28 12 L32 26 M72 12 L68 26" stroke="#3A3A3A" stroke-width="5" stroke-linecap="round"/><line x1="12" y1="40" x2="88" y2="40" stroke="#3A3A3A" stroke-width="4"/><rect x="24" y="50" width="18" height="16" rx="3" fill="#D9534F" stroke="#3A3A3A" stroke-width="3"/><rect x="56" y="50" width="18" height="16" rx="3" fill="#1D9E75" stroke="#3A3A3A" stroke-width="3"/></svg>
+    <div class="section-title">📅 每周日程</div>
+    <div class="section-subtitle">本周 ${weekTasks} 个任务 · 可拖拽</div>
+  </div>
+  <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+    <button class="btn btn-primary" id="wkAdd">+ 新建任务</button>
+  </div>
+  <div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: var(--blue-dark);">💡 按住任务块可拖到任意一天（手机长按拖动）；点击任务块可编辑；点击左侧日期可跳到那一周</div>
+  <div class="weekly-wrap">
+    <div class="wk-card">
+      <div class="wk-cal-top">
+        <div><div class="wk-cal-m-en">${MONTH_EN[m]}</div><div class="wk-cal-m-cn">${MONTH_CN[m]}</div></div>
+        <div class="wk-cal-cat">${catSvg(m)}</div>
+      </div>
+      ${cal}
+      <div class="wk-cal-foot">每月自动切换小猫主题形象<br>有任务的日期下方有小圆点</div>
+    </div>
+    <div class="wk-card">
+      <div class="wk-head">
+        <div><div style="font-size: 14px; font-weight: 600; color: var(--text);">本周日程</div><div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">${label}</div></div>
+        <div class="wk-nav">
+          <button class="btn btn-ghost btn-sm" id="wkPrev">‹ 上一周</button>
+          <button class="btn btn-ghost btn-sm" id="wkToday">本周</button>
+          <button class="btn btn-ghost btn-sm" id="wkNext">下一周 ›</button>
+        </div>
+      </div>
+      ${grid}
+    </div>
+  </div>`;
+}
+
+function moveWkTask(id, day, beforeId) {
+  if (!id) return;
+  const data = getWeeklyData();
+  const idx = data.tasks.findIndex(t => t.id === id);
+  if (idx < 0) return;
+  const task = data.tasks.splice(idx, 1)[0];
+  task.date = day;
+  if (beforeId && beforeId !== id) {
+    const bi = data.tasks.findIndex(t => t.id === beforeId);
+    if (bi >= 0) data.tasks.splice(bi, 0, task); else data.tasks.push(task);
+  } else {
+    data.tasks.push(task);
+  }
+  STORAGE.set('weekly', data);
+  render();
+  toast('已移动', 'success');
+}
+
+let wkSuppressClick = false;
+function initWeeklyDrag() {
+  $$('.wk-task').forEach(el => {
+    el.addEventListener('pointerdown', function (e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      const startX = e.clientX, startY = e.clientY;
+      const rect = el.getBoundingClientRect();
+      const offX = startX - rect.left, offY = startY - rect.top;
+      let dragging = false, clone = null, timer = null;
+      el._wkMoved = false;
+
+      function begin() {
+        dragging = true;
+        wkSuppressClick = true;
+        clone = el.cloneNode(true);
+        clone.className = 'wk-task wk-ghost';
+        clone.style.position = 'fixed';
+        clone.style.left = rect.left + 'px';
+        clone.style.top = rect.top + 'px';
+        clone.style.width = rect.width + 'px';
+        clone.style.zIndex = '9999';
+        clone.style.pointerEvents = 'none';
+        document.body.appendChild(clone);
+        el.classList.add('wk-dragging');
+        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) { } }
+      }
+      function clearOver() { $$('.wk-col-body.over').forEach(c => c.classList.remove('over')); }
+      function onMove(ev) {
+        if (!dragging) {
+          if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) { clearTimeout(timer); finish(null); }
+          return;
+        }
+        if (ev.cancelable) ev.preventDefault();
+        clone.style.left = (ev.clientX - offX) + 'px';
+        clone.style.top = (ev.clientY - offY) + 'px';
+        clearOver();
+        clone.style.visibility = 'hidden';
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        clone.style.visibility = '';
+        const col = under && under.closest ? under.closest('.wk-col-body') : null;
+        if (col) col.classList.add('over');
+      }
+      function onUp(ev) {
+        clearTimeout(timer);
+        if (!dragging) { finish(null); return; }
+        clone.style.visibility = 'hidden';
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        const col = under && under.closest ? under.closest('.wk-col-body') : null;
+        let beforeId = null;
+        if (col) {
+          const taskEl = under && under.closest ? under.closest('.wk-task') : null;
+          if (taskEl && taskEl.dataset.id !== el.dataset.id) beforeId = taskEl.dataset.id;
+          finish(col.dataset.day, beforeId);
+          return;
+        }
+        finish(null);
+      }
+      function finish(day, beforeId) {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        if (clone && clone.parentNode) clone.remove();
+        el.classList.remove('wk-dragging');
+        clearOver();
+        if (dragging) setTimeout(() => { wkSuppressClick = false; }, 320);
+        // 原地长按后松手：不重排，避免误把任务甩到列尾
+        if (day && !(day === el.dataset.date && !beforeId)) moveWkTask(el.dataset.id, day, beforeId);
+      }
+      timer = setTimeout(begin, 170);
+      document.addEventListener('pointermove', onMove, { passive: false });
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
+    });
+    el.addEventListener('click', function () {
+      if (wkSuppressClick) return;
+      openWeeklyForm(el.dataset.id);
+    });
+  });
+}
+
+function openWeeklyForm(id, defaultDate) {
+  const data = getWeeklyData();
+  const item = id ? data.tasks.find(t => t.id === id) : null;
+  const d = item || { date: defaultDate || today(), ink: 'blue', done: false };
+  const html = makeModal(id ? '编辑任务' : '新建任务', `
+    <div class="form-row"><label class="form-label">任务标题 *</label><input class="form-input" id="f_title" value="${escapeHtml(d.title || '')}" placeholder="如：项目评审"></div>
+    <div class="form-row form-row-inline">
+      <div><label class="form-label">日期</label><input class="form-input" type="date" id="f_date" value="${d.date || today()}"></div>
+      <div><label class="form-label">时间</label><input class="form-input" type="time" id="f_time" value="${escapeHtml(d.time || '')}"></div>
+    </div>
+    <div class="form-row"><label class="form-label">颜色</label>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        ${WK_INK_KEYS.map(k => `<button type="button" class="wk-ink-pick" data-ink="${k}" style="--ink:${hexToRgba(WK_INKS[k].main, 0.5)};--edge:${WK_INKS[k].edge};--mis:${WK_INKS[k].mis};${d.ink === k ? 'outline:2px solid ' + WK_INKS[k].edge + ';outline-offset:2px;' : ''}"></button>`).join('')}
+      </div>
+    </div>
+    <div class="form-row"><label class="form-label">备注</label><textarea class="form-textarea" id="f_note" placeholder="可选">${escapeHtml(d.note || '')}</textarea></div>
+    <div class="form-row"><label class="form-label">状态</label><select class="form-select" id="f_done"><option value="0" ${!d.done ? 'selected' : ''}>未完成</option><option value="1" ${d.done ? 'selected' : ''}>已完成</option></select></div>
+    <div class="form-actions">
+      ${id ? '<button class="btn btn-ghost" id="wkDel" style="color: var(--red); border-color: var(--red);">删除</button>' : ''}
+      <button class="btn btn-primary" id="saveBtn">保存</button>
+      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+    </div>`);
+  openModal(html);
+  let pickedInk = d.ink || 'blue';
+  $$('.wk-ink-pick').forEach(b => {
+    b.onclick = () => {
+      pickedInk = b.dataset.ink;
+      $$('.wk-ink-pick').forEach(x => { x.style.outline = (x === b) ? ('2px solid ' + WK_INKS[x.dataset.ink].edge) : 'none'; });
+    };
+  });
+  const del = $('#wkDel');
+  if (del) del.onclick = () => {
+    closeModal();
+    confirm2('确认删除', '确定要删除这个任务吗？', () => {
+      const dd = getWeeklyData();
+      dd.tasks = dd.tasks.filter(t => t.id !== id);
+      STORAGE.set('weekly', dd);
+      toast('已删除', 'success'); render();
+    });
+  };
+  $('#saveBtn').onclick = () => {
+    const obj = {
+      id: id || uid(),
+      title: $('#f_title').value.trim(),
+      date: $('#f_date').value || today(),
+      time: $('#f_time').value.trim(),
+      ink: pickedInk,
+      note: $('#f_note').value.trim(),
+      done: $('#f_done').value === '1'
+    };
+    if (!obj.title) { toast('请填写任务标题', 'error'); return; }
+    const dd = getWeeklyData();
+    if (id) { const i = dd.tasks.findIndex(t => t.id === id); if (i >= 0) dd.tasks[i] = obj; }
+    else dd.tasks.push(obj);
+    STORAGE.set('weekly', dd);
+    toast('已保存', 'success');
+    closeModal();
+    weekOffset = Math.round((new Date(mondayOf(obj.date) + 'T00:00:00') - new Date(mondayOf(today()) + 'T00:00:00')) / 86400000 / 7);
+    render();
+  };
+}
+
 // ===== 事件绑定 =====
 function bindEvents() {
   $$('.nav-item').forEach(n => n.onclick = () => switchSection(n.dataset.section));
@@ -2339,6 +2776,13 @@ function bindEvents() {
   $$('[data-toggle-workout]').forEach(b => b.onclick = () => toggleWorkoutDay(parseInt(b.dataset.toggleWorkout)));
   $$('[data-edit-workout-day]').forEach(b => b.onclick = () => openWorkoutDayForm(parseInt(b.dataset.editWorkoutDay)));
   bind('addKanban', () => openKanbanForm());
+  bind('wkAdd', () => openWeeklyForm(null, null));
+  bind('wkPrev', () => { weekOffset--; render(); });
+  bind('wkNext', () => { weekOffset++; render(); });
+  bind('wkToday', () => { weekOffset = 0; render(); });
+  $$('[data-cal-day]').forEach(b => b.onclick = () => jumpToWeek(b.dataset.calDay));
+  $$('[data-add-wk-day]').forEach(b => b.onclick = (e) => { e.stopPropagation(); openWeeklyForm(null, b.dataset.addWkDay); });
+  if (currentSection === 'weekly') initWeeklyDrag();
   $$('[data-edit-kanban]').forEach(b => b.onclick = () => openKanbanForm(b.dataset.editKanban));
   $$('[data-del-kanban]').forEach(b => b.onclick = () => {
     const id = b.dataset.delKanban;
