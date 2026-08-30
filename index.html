@@ -851,6 +851,55 @@ input[list]::-webkit-calendar-picker-indicator { display: none; }
 .wk-ink-pick { width: 34px; height: 26px; padding: 0; cursor: pointer; border-radius: 9px 7px 10px 6px / 6px 10px 7px 9px; border: 1.5px solid var(--edge); background: var(--ink); position: relative; overflow: hidden; }
 .wk-ink-pick::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 1px 1px, rgba(58,58,58,0.16) 0.6px, transparent 0.7px); background-size: 5px 5px; opacity: 0.6; }
 .wk-ink-pick:hover { transform: translateY(-1px); }
+
+/* ===== 地图打卡 ===== */
+.map-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.map-panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow); }
+.map-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.map-search { flex: 1; min-width: 180px; }
+.map-canvas { height: 460px; border-radius: 12px; overflow: hidden; background: var(--blue-light); border: 1px solid var(--border); }
+.map-fallback { height: 460px; border-radius: 12px; background: var(--blue-light); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; color: var(--blue-dark); font-size: 13px; line-height: 1.7; }
+.map-legend { display: flex; gap: 12px; align-items: center; margin-top: 10px; font-size: 12px; color: var(--text-light); flex-wrap: wrap; }
+.map-legend-item { display: flex; align-items: center; gap: 5px; }
+.map-side { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); max-height: 620px; overflow-y: auto; }
+.map-side-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.map-filters { display: flex; gap: 6px; margin-bottom: 12px; }
+.map-filter { padding: 5px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); font-size: 12px; color: var(--text-light); cursor: pointer; }
+.map-filter.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+.map-pin { position: relative; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 10px 10px 10px 14px; margin-bottom: 10px; cursor: pointer; transition: box-shadow .15s, transform .15s; }
+.map-pin:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.map-pin::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 12px 0 0 12px; }
+.map-pin.good::before { background: var(--green); }
+.map-pin.bad::before { background: var(--red); }
+.map-pin-row { display: flex; gap: 10px; }
+.map-pin-thumb { width: 56px; height: 56px; border-radius: 8px; flex-shrink: 0; overflow: hidden; object-fit: cover; background: var(--blue-light); display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-light); }
+.map-pin-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.map-pin-main { flex: 1; min-width: 0; }
+.map-pin-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; word-break: break-word; }
+.map-pin-addr { font-size: 11px; color: var(--text-light); margin-top: 2px; word-break: break-word; }
+.map-pin-note { font-size: 11px; color: var(--text-light); margin-top: 4px; line-height: 1.45; word-break: break-word; }
+.map-pin-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 6px; }
+.map-pin-date { font-size: 11px; color: #A5A5A5; }
+.map-tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.map-tag.good { background: var(--green-light); color: var(--green); }
+.map-tag.bad { background: var(--red-light); color: var(--red); }
+.map-rec-card { border-radius: 12px; padding: 12px; margin-bottom: 10px; display: flex; gap: 12px; align-items: flex-start; }
+.map-rec-thumb { width: 52px; height: 52px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.map-rec-main { flex: 1; min-width: 0; }
+.map-rec-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; }
+.map-rec-desc { font-size: 11px; color: var(--text-light); margin-top: 3px; line-height: 1.5; }
+.map-rec-meta { font-size: 10px; color: #A5A5A5; margin-top: 4px; }
+.map-rec-acts { display: flex; gap: 6px; flex-shrink: 0; }
+.map-rec-btn { padding: 5px 10px; border-radius: 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--blue); background: #fff; color: var(--blue-dark); }
+.map-rec-btn.go { background: var(--green); border-color: var(--green); color: #fff; }
+.map-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.map-chip { padding: 7px 14px; border-radius: 14px; border: 1px solid var(--border); background: #fff; font-size: 12px; color: var(--text-light); cursor: pointer; }
+.map-chip.on { font-weight: 500; }
+@media (max-width: 900px) {
+  .map-wrap { grid-template-columns: 1fr; }
+  .map-side { max-height: none; }
+  .map-canvas, .map-fallback { height: 360px; }
+}
 @media (max-width: 900px) {
   .weekly-wrap { grid-template-columns: 1fr; }
 }
@@ -2000,10 +2049,10 @@ function renderIdeas() {
 // ===== 生活 =====
 function renderLife() {
   const sub = currentSubtab.life || 'books';
-  const subs = [{ key: 'books', label: '阅读' }, { key: 'spots', label: '游玩' }, { key: 'essays', label: '随笔' }, { key: 'topics', label: '自媒体' }, { key: 'workout', label: '锻炼' }];
+  const subs = [{ key: 'books', label: '阅读' }, { key: 'map', label: '地图打卡' }, { key: 'essays', label: '随笔' }, { key: 'topics', label: '自媒体' }, { key: 'workout', label: '锻炼' }];
   let html = `<div class="section-header"><svg class="section-icon" viewBox="0 0 100 100"><path d="M 50 85 C 25 65 12 50 12 35 C 12 22 22 12 35 12 C 42 12 48 16 50 22 C 52 16 58 12 65 12 C 78 12 88 22 88 35 C 88 50 75 65 50 85 Z" fill="#F5C5C2" stroke="#3A3A3A" stroke-width="2.5"/></svg><div class="section-title">生活空间</div><div class="section-subtitle">工作之外，记得生活</div></div><div class="subtabs">${subs.map(s => `<button class="subtab ${sub === s.key ? 'active' : ''}" data-sub="${s.key}">${s.label}</button>`).join('')}</div>`;
   if (sub === 'books') html += renderBooks();
-  else if (sub === 'spots') html += renderSpots();
+  else if (sub === 'map') html += renderMapCheckin();
   else if (sub === 'essays') html += renderEssays();
   else if (sub === 'topics') html += renderTopics();
   else if (sub === 'workout') html += renderWorkout();
@@ -2116,26 +2165,6 @@ function renderBooks() {
     </div>`).join('')}</div>`}`;
 }
 
-function renderSpots() {
-  const spots = STORAGE.get('spots', []);
-  return `<div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
-    <button class="btn btn-primary" id="addSpot">+ 添加去处</button>
-    <button class="btn btn-cream" id="aiSpot">✨ AI 推荐去处</button>
-  </div>
-  <div style="background: var(--cream); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #8B6F3D;">💡 AI 推荐去处：输入城市和方向，AI 自动整合社媒平台推荐 2 个地点并保存</div>
-  ${spots.length === 0 ? `<div class="list-empty"><div class="list-empty-icon">📍</div>还没有推荐去处</div>` :
-    spots.map(s => `<div class="spot-card" data-id="${s.id}">
-      ${s.image ? `<div class="spot-image" style="background-image: url('${s.image}')"></div>` : `<div class="spot-image">📍</div>`}
-      <div class="spot-body">
-        <div class="spot-city">${escapeHtml(s.city || '北京')}</div>
-        <div class="spot-title">${escapeHtml(s.title)}</div>
-        <div class="spot-reason">${escapeHtml(s.reason || '')}</div>
-        <div style="margin-top: 8px;">${stageTagHtml(s.currentStage)}</div>
-        <div class="card-actions"><button class="btn btn-ghost btn-sm" data-edit="${s.id}">编辑</button><button class="btn btn-ghost btn-sm" data-del="${s.id}">删除</button></div>
-      </div>
-    </div>`).join('')}`;
-}
-
 function renderEssays() {
   const essays = STORAGE.get('essays', []);
   const list = essays.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -2187,6 +2216,17 @@ function renderSettings() {
       <div class="form-row form-row-inline"><label class="form-label" style="margin:0 8px 0 0;">生成时启用模型原生联网搜索</label><input type="checkbox" id="apiNativeWeb" ${api.nativeWeb ? 'checked' : ''}></div>
       <div class="form-hint">仅「智谱 GLM」生效（Kimi 由模型自动判断）。开启后 AI 调用会自动联网检索真实资料，生成结果自带可查来源——这也是本工作台唯一的联网方式，无需额外配置。</div>
       <div class="form-actions"><button class="btn btn-primary" id="saveApi">保存配置</button><button class="btn btn-ghost" id="testApi">测试连接</button></div>
+    </div></div>
+    <div class="settings-section"><div class="settings-section-title">地图配置</div><div class="card">
+      <div class="form-row"><label class="form-label">腾讯地图 Key</label><input class="form-input" id="tmapKey" type="password" value="${escapeHtml(STORAGE.get('tmapKey', ''))}" placeholder="留空则使用本地代理模式（仅本地预览可用）"><div class="form-hint">用于「地图打卡」模块。Key 只保存在你自己的浏览器里，<b>不会写进文件、不会上传、不会进入备份</b>。申请入口：lbs.qq.com → 控制台 → 创建应用 → 选 JavaScript GL。建议在控制台配置 <b>域名白名单</b> 防盗用。</div></div>
+      <div class="form-hint" style="margin-bottom:12px;">
+        说明：填了 Key 时线上（如 Vercel）可正常显示地图；不填 Key 则走本地代理模式，<b>仅在本机打开时可用</b>，部署到公网会因代理地址不可达而地图空白。<br>
+        <b>控制台必须勾选「SDK」产品</b>（JavaScript API GL 依赖 SDK 授权），只勾选「WebServiceAPI」会导致定位/搜索服务不可用。<br>
+        <b>关键：本地预览请把「域名白名单」留空。</b>腾讯靠请求的 Referer 匹配白名单，而本地预览地址是 <code>127.0.0.1:端口</code>，腾讯无法识别成合法来源域名，会直接拒绝（报「无来源信息」）。留空 = 不限制来源，本地即可正常定位。<br>
+        <b>部署到 Vercel 后</b>，再把 <code>life-dashboard-pi-kohl.vercel.app</code> 填进白名单，线上依然受保护。<br>
+        安全性说明：Key 只存在你自己浏览器的 localStorage 里，不进文件也不进 GitHub，留空白名单的实际风险很低；腾讯还有每日调用额度兜底。
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" id="saveTmap">保存地图配置</button><button class="btn btn-cream" id="testTmap">测试定位</button></div>
     </div></div>
     <div class="settings-section"><div class="settings-section-title">数据备份</div><div class="card">
       <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light);">📊 当前数据：${total} 条记录 · 占用空间约 ${(size / 1024).toFixed(1)} KB</div>
@@ -2704,6 +2744,630 @@ function openWeeklyForm(id, defaultDate) {
   };
 }
 
+// ===== 地图打卡 =====
+// 合规说明：本模块使用腾讯地图 GL JS（合规服务商）。Key 由用户在设置页自行填写并保存在
+// 浏览器 localStorage，源码中不含任何可用 Key。未填 Key 时走 WorkBuddy 本地代理模式。
+// 非默认场景的 Key 约定占位符：key="请在腾讯位置服务开放平台自行申请 Key 并替换此占位符"
+const TMAP_PROXY_HOST = 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__';
+const MAP_CATS = [
+  { key: 'food', label: '美食', bg: '#FDF3E3', bd: '#E8D5B7', tx: '#854F0B', ic: '#EF9F27' },
+  { key: 'night', label: '夜景', bg: '#E8F1F8', bd: '#A8C5E0', tx: '#185FA5', ic: '#7AA8D6' },
+  { key: 'sight', label: '观光', bg: '#E3F2F0', bd: '#9FE1CB', tx: '#0F6E56', ic: '#5DCAA5' },
+  { key: 'walk', label: 'citywalk', bg: '#E7F5E9', bd: '#97C459', tx: '#3B6D11', ic: '#97C459' },
+  { key: 'culture', label: '文化艺术', bg: '#FBE9EC', bd: '#ED93B1', tx: '#993556', ic: '#D4537E' },
+  { key: 'photo', label: '拍照', bg: '#FDEEE0', bd: '#F0997B', tx: '#993C1D', ic: '#F0997B' },
+  { key: 'museum', label: '博物馆', bg: '#FAF0D9', bd: '#EF9F27', tx: '#854F0B', ic: '#C68F2A' },
+  { key: 'bar', label: '酒吧', bg: '#FBE4E2', bd: '#F09595', tx: '#A32D2D', ic: '#E24B4A' }
+];
+let mapFilter = 'all';
+let tmap = null, tmapMarkers = null, tmapLoaded = false, tmapFailed = false;
+
+function getTmapKey() { return (STORAGE.get('tmapKey', '') || '').trim(); }
+function getMapPins() { return STORAGE.get('mapPins', []); }
+function saveMapPins(arr) { STORAGE.set('mapPins', arr); }
+function mapCatOf(k) { return MAP_CATS.find(c => c.key === k) || MAP_CATS[0]; }
+
+function catMarkerDataUrl(kind) {
+  const fill = kind === 'good' ? '#C0DD97' : '#A8C5E0';
+  const stroke = kind === 'good' ? '#2D8659' : '#185FA5';
+  const eye = kind === 'good'
+    ? '<circle cx="-11" cy="3" r="4.6" fill="' + stroke + '"/><circle cx="11" cy="3" r="4.6" fill="' + stroke + '"/>'
+    : '<path d="M-17 1 L-11 6 L-5 1" fill="none" stroke="' + stroke + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 1 L11 6 L17 1" fill="none" stroke="' + stroke + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+  const mouth = kind === 'good'
+    ? '<path d="M-6 14 Q0 20 6 14" fill="none" stroke="' + stroke + '" stroke-width="3" stroke-linecap="round"/>'
+    : '<path d="M-6 20 Q0 13 6 20" fill="none" stroke="' + stroke + '" stroke-width="3" stroke-linecap="round"/>';
+  const extra = kind === 'good'
+    ? '<circle cx="-21" cy="14" r="4.5" fill="#F0997B" opacity="0.55"/><circle cx="21" cy="14" r="4.5" fill="#F0997B" opacity="0.55"/>'
+    : '<path d="M13 8 Q17 17 13 21" fill="none" stroke="#378ADD" stroke-width="3" stroke-linecap="round"/>';
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="-36 -36 72 72">'
+    + '<path d="M-30 6 L-27 -12 L-31 -30 L-11 -19 Q0 -13 11 -19 L31 -30 L27 -12 L30 6 Q33 22 17 29 Q0 36 -17 29 Q-33 22 -30 6 Z" fill="' + fill + '" stroke="' + stroke + '" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>'
+    + '<path d="M-24 -14 L-27 -25 L-15 -19 Z" fill="#F0997B" opacity="0.9"/>'
+    + '<path d="M24 -14 L27 -25 L15 -19 Z" fill="#F0997B" opacity="0.9"/>'
+    + eye + mouth + extra + '</svg>';
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+let tmapLoading = false;
+const tmapQueue = [];
+function flushTMapQueue(ok) {
+  const q = tmapQueue.splice(0);
+  q.forEach(fn => { try { fn(ok); } catch (e) { console.warn(e); } });
+}
+function loadTMap(cb) {
+  if (tmapLoaded && window.TMap) { cb(true); return; }
+  if (tmapFailed) { cb(false); return; }
+  tmapQueue.push(cb);
+  if (tmapLoading) return;
+  tmapLoading = true;
+  const key = getTmapKey();
+  let src = 'https://map.qq.com/api/gljs?v=1.exp&libraries=service';
+  if (key) {
+    src += '&key=' + encodeURIComponent(key);
+  } else {
+    // 默认场景：代理模式，SDK 内部请求走 WorkBuddy 本地代理，前台零 Key
+    window._TMapSecurityConfig = { serviceHost: TMAP_PROXY_HOST };
+  }
+  const s = document.createElement('script');
+  s.src = src;
+  s.onload = () => { tmapLoaded = true; tmapLoading = false; flushTMapQueue(!!window.TMap); };
+  s.onerror = () => { tmapFailed = true; tmapLoading = false; flushTMapQueue(false); };
+  document.head.appendChild(s);
+}
+
+function mapDefaultCenter() {
+  const pins = getMapPins().filter(p => p.lat && p.lng);
+  if (pins.length) return { lat: pins[0].lat, lng: pins[0].lng };
+  return { lat: 23.1291, lng: 113.2644 };
+}
+
+function initMapCheckin() {
+  const el = document.getElementById('mapContainer');
+  if (!el) return;
+  loadTMap((ok) => {
+    if (!ok || !window.TMap) {
+      el.innerHTML = '<div class="map-fallback"><div style="font-size:32px;">🗺️</div>'
+        + '<div>地图暂时无法显示</div>'
+        + '<div style="font-size:12px;max-width:320px;">'
+        + (getTmapKey() ? 'Key 可能无效或网络不通，请到设置页检查腾讯地图 Key。'
+          : '当前未填写腾讯地图 Key，且本地代理仅在 WorkBuddy 本机可用。到「设置 → 地图配置」填入 Key 即可正常显示。')
+        + '</div><div style="font-size:12px;">打卡列表与新增打卡不受影响，仍可正常使用。</div></div>';
+      return;
+    }
+    const c = mapDefaultCenter();
+    tmap = new window.TMap.Map(el, { zoom: 12, center: new window.TMap.LatLng(c.lat, c.lng) });
+    renderMapPins();
+  });
+}
+
+function renderMapPins() {
+  if (!tmap || !window.TMap) return;
+  const pins = getMapPins().filter(p => p.lat && p.lng);
+  if (tmapMarkers) { try { tmapMarkers.setMap(null); } catch (e) { } tmapMarkers = null; }
+  if (!pins.length) return;
+  const st = { width: 40, height: 40, anchor: { x: 20, y: 20 } };
+  tmapMarkers = new window.TMap.MultiMarker({
+    map: tmap,
+    styles: {
+      good: new window.TMap.MarkerStyle(Object.assign({}, st, { src: catMarkerDataUrl('good') })),
+      bad: new window.TMap.MarkerStyle(Object.assign({}, st, { src: catMarkerDataUrl('bad') }))
+    },
+    geometries: pins.map(p => ({
+      id: p.id,
+      styleId: p.rating === 'bad' ? 'bad' : 'good',
+      position: new window.TMap.LatLng(p.lat, p.lng)
+    }))
+  });
+  tmapMarkers.on('click', (e) => { if (e && e.geometry && e.geometry.id) openPinDetail(e.geometry.id); });
+}
+
+function mapFlyTo(lat, lng, zoom) {
+  if (!tmap || !window.TMap || !lat || !lng) return;
+  tmap.setCenter(new window.TMap.LatLng(lat, lng));
+  tmap.setZoom(zoom || 15);
+}
+
+function jsonpRequest(url, cb) {
+  const name = 'wb_tmap_jsonp_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+  const script = document.createElement('script');
+  const sep = url.indexOf('?') >= 0 ? '&' : '?';
+  const fullUrl = url + sep + 'callback=' + encodeURIComponent(name);
+  script.src = fullUrl;
+  let done = false;
+  const cleanup = () => { try { delete window[name]; } catch (e) {} if (script.parentNode) script.parentNode.removeChild(script); };
+  console.log('[地图] JSONP 请求:', fullUrl.replace(/key=[^&]+/, 'key=***'));
+  window[name] = (data) => {
+    if (done) return;
+    done = true;
+    console.log('[地图] JSONP 回调返回:', data);
+    cb(data, null);
+    cleanup();
+  };
+  script.onerror = (e) => {
+    if (done) return;
+    done = true;
+    console.error('[地图] JSONP 脚本加载失败（通常是域名未授权或网络不通）:', fullUrl.replace(/key=[^&]+/, 'key=***'), e);
+    cb(null, { error: 'JSONP 脚本加载失败：当前域名可能不在 WebServiceAPI 白名单内。注意腾讯对 127.0.0.1 可能不支持 :* 端口通配，可尝试填 127.0.0.1 或当前具体端口。', type: 'load_error' });
+    cleanup();
+  };
+  script.onload = () => {
+    // 脚本已加载但回调未被调用，通常是服务端返回了错误但未执行 callback
+    setTimeout(() => {
+      if (!done) {
+        done = true;
+        console.error('[地图] JSONP 超时：脚本已加载但回调未执行（可能是返回格式异常或域名未授权）');
+        cb(null, { error: 'JSONP 请求超时或返回异常，请检查域名白名单与 Key 是否启用 WebServiceAPI', type: 'timeout' });
+        cleanup();
+      }
+    }, 2000);
+  };
+  document.head.appendChild(script);
+}
+
+function parseWsResult(res) {
+  // 兼容 status/code/message/msg 等字段差异
+  if (!res) return { ok: false, status: null, message: '返回为空' };
+  const status = res.status != null ? res.status : res.code;
+  if (status === 0 || status === '0') return { ok: true, status: status, message: res.message || '' };
+  return { ok: false, status: status, message: res.message || res.msg || ('状态码 ' + status) };
+}
+
+function enrichWsError(msg) {
+  // 腾讯域名白名单靠 Referer 匹配，本地预览(127.0.0.1:端口)无法被识别为合法来源
+  if (!msg) return msg;
+  if (msg.indexOf('无来源信息') >= 0 || msg.indexOf('来源域名未被授权') >= 0 || msg.indexOf('请求来源未被授权') >= 0) {
+    const isLocal = location.hostname === '127.0.0.1' || location.hostname === 'localhost' || /^https?:\/\/127\.0\.0\.1/.test(location.href);
+    if (isLocal) {
+      return msg + ' —— 本地预览(127.0.0.1)无法被腾讯识别为合法来源域名，建议本地调试时把 Key 的「域名白名单」留空，部署到 Vercel 后再填上正式域名。';
+    }
+    return msg + ' —— 请在腾讯控制台把当前域名 ' + location.hostname + ' 加入 Key 的「域名白名单」。';
+  }
+  return msg;
+}
+
+function geocodeByWebService(addr, cb) {
+  const key = getTmapKey();
+  if (!key) { cb(null, { error: '未填 Key' }); return; }
+  console.log('[地图] 尝试 WebServiceAPI 地址解析:', addr);
+  jsonpRequest('https://apis.map.qq.com/ws/geocoder/v1/?address=' + encodeURIComponent(addr) + '&key=' + encodeURIComponent(key) + '&output=jsonp', (res, err) => {
+    if (err) { cb(null, err); return; }
+    const r1 = parseWsResult(res);
+    console.log('[地图] WebService Geocoder 解析:', r1);
+    if (r1.ok && res.result && res.result.location) {
+      cb({ lat: res.result.location.lat, lng: res.result.location.lng }, { source: 'ws:geocoder' });
+      return;
+    }
+    if (!r1.ok) {
+      cb(null, { error: '地址解析：' + enrichWsError(r1.message), searched: true });
+      return;
+    }
+    console.log('[地图] WebService Geocoder 无结果，尝试 POI 搜索');
+    jsonpRequest('https://apis.map.qq.com/ws/place/v1/search?keyword=' + encodeURIComponent(addr) + '&boundary=region(%E5%85%A8%E5%9B%BD,0)&page_size=5&key=' + encodeURIComponent(key) + '&output=jsonp', (res2, err2) => {
+      if (err2) { cb(null, err2); return; }
+      const r2 = parseWsResult(res2);
+      console.log('[地图] WebService Search 解析:', r2);
+      if (!r2.ok) { cb(null, { error: '地点搜索：' + enrichWsError(r2.message), searched: true }); return; }
+      const list = res2.data;
+      if (!list || !list.length) { cb(null, { error: 'WebServiceAPI 未找到匹配地点', searched: true }); return; }
+      const first = list[0];
+      if (first && first.location) {
+        cb({ lat: first.location.lat, lng: first.location.lng }, { source: 'ws:search', title: first.title });
+        return;
+      }
+      cb(null, { error: 'WebServiceAPI 搜索结果缺少坐标', searched: true });
+    });
+  });
+}
+
+function geocodeAddress(addr, cb) {
+  loadTMap((ok) => {
+    if (!ok || !window.TMap || !window.TMap.service) {
+      const reason = !ok ? 'SDK 加载失败' : (!window.TMap ? 'window.TMap 不存在' : 'window.TMap.service 不存在（SDK 未启用或 libraries=service 未生效）');
+      console.error('[地图] 无法开始定位：' + reason, { keySet: !!getTmapKey(), ok: ok, hasTMap: !!window.TMap, hasService: !!(window.TMap && window.TMap.service) });
+      // SDK 服务不可用，尝试 WebServiceAPI REST 兜底
+      geocodeByWebService(addr, (loc, info) => {
+        if (!loc) info = Object.assign({}, info || {}, { error: (info && info.error ? info.error + '；' : '') + reason });
+        cb(loc, info);
+      });
+      return;
+    }
+    const onLoc = (loc, source, title) => {
+      if (loc && (loc.lat != null || loc.latitude != null) && (loc.lng != null || loc.longitude != null)) {
+        const fixed = { lat: Number(loc.lat != null ? loc.lat : loc.latitude), lng: Number(loc.lng != null ? loc.lng : loc.longitude) };
+        console.log('[地图] 定位成功 [' + source + ']', title || '', fixed);
+        cb(fixed, { source: source, title: title || '' });
+        return true;
+      }
+      return false;
+    };
+    const logRes = (step, res) => { console.log('[地图] ' + step + ' 原始返回:', res); };
+
+    // 第一步：地址解析（适合完整地址）
+    try {
+      const geo = new window.TMap.service.Geocoder();
+      geo.getLocation({ address: addr }).then(res => {
+        logRes('Geocoder.getLocation', res);
+        const status = res && (res.status != null ? res.status : res.code);
+        if (status !== 0 && status !== '0' && status !== 200) {
+          console.warn('[地图] Geocoder 返回非成功状态:', status, res && res.message);
+          trySearch();
+          return;
+        }
+        if (onLoc(res && res.result && res.result.location, 'geocoder')) return;
+        trySearch();
+      }).catch(err => {
+        console.error('[地图] Geocoder 调用异常:', err, err && err.message, err && err.stack);
+        trySearch();
+      });
+    } catch (e) {
+      console.error('[地图] Geocoder 构造异常:', e);
+      trySearch();
+    }
+
+    function trySearch() {
+      // 第二步：POI 搜索（适合店名/地点名，如 "jpg canteen"）
+      try {
+        const SearchCls = window.TMap.service.Search;
+        if (!SearchCls) { geocodeByWebService(addr, cb); return; }
+        const search = new SearchCls();
+        console.log('[地图] Search 实例方法:', Object.keys(search).filter(k => typeof search[k] === 'function').join(', '));
+        const searchFn = search.search || search.searchByKeyword || search.searchByRegion || search.searchByArea;
+        if (!searchFn) {
+          console.warn('[地图] Search 实例没有可用搜索方法，跳过 JS SDK Search');
+          geocodeByWebService(addr, cb);
+          return;
+        }
+        const opts = search.search ? { keyword: addr, region: '', page_size: 5 }
+          : search.searchByKeyword ? { keyword: addr, region: '' }
+          : { keyword: addr };
+        searchFn.call(search, opts).then(res => {
+          logRes('Search', res);
+          const status = res && (res.status != null ? res.status : res.code);
+          if (status !== 0 && status !== '0' && status !== 200) {
+            console.warn('[地图] Search 返回非成功状态:', status, res && res.message);
+            geocodeByWebService(addr, cb);
+            return;
+          }
+          const list = res && (res.data || res.results || res.result);
+          if (!list || !list.length) {
+            console.warn('[地图] Search 无结果');
+            geocodeByWebService(addr, cb);
+            return;
+          }
+          const first = list[0];
+          if (onLoc(first.location || (first.lat != null && first.lng != null ? { lat: first.lat, lng: first.lng } : null), 'search', first.title || first.name)) return;
+          geocodeByWebService(addr, cb);
+        }).catch(err => {
+          console.error('[地图] Search 调用异常:', err);
+          geocodeByWebService(addr, cb);
+        });
+      } catch (e) {
+        console.error('[地图] Search 构造异常:', e);
+        geocodeByWebService(addr, cb);
+      }
+    }
+  });
+}
+
+function renderMapCheckin() {
+  const all = getMapPins().slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const pins = mapFilter === 'all' ? all : all.filter(p => (p.rating || 'good') === mapFilter);
+  const goodCount = all.filter(p => (p.rating || 'good') !== 'bad').length;
+  const badCount = all.length - goodCount;
+  const hasKey = !!getTmapKey();
+
+  let list = pins.length === 0
+    ? '<div class="list-empty"><div class="list-empty-icon">📍</div>还没有打卡记录<br><span style="font-size:13px;">在地图上搜到地点后点「打卡」即可记录</span></div>'
+    : pins.map(p => {
+      const good = (p.rating || 'good') !== 'bad';
+      return '<div class="map-pin ' + (good ? 'good' : 'bad') + '" data-pin="' + p.id + '">'
+        + '<div class="map-pin-row">'
+        + (p.image ? '<div class="map-pin-thumb"><img src="' + p.image + '" alt=""></div>' : '<div class="map-pin-thumb">📍</div>')
+        + '<div class="map-pin-main">'
+        + '<div class="map-pin-title">' + escapeHtml(p.name || '未命名') + '</div>'
+        + (p.address ? '<div class="map-pin-addr">' + escapeHtml(p.address) + '</div>' : '')
+        + (p.note ? '<div class="map-pin-note">' + escapeHtml(p.note) + '</div>' : '')
+        + '<div class="map-pin-meta"><span class="map-pin-date">' + (p.date || '') + '</span>'
+        + '<span class="map-tag ' + (good ? 'good' : 'bad') + '">' + (good ? '好评' : '差评') + '</span></div>'
+        + '</div></div></div>';
+    }).join('');
+
+  return '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">'
+    + '<button class="btn btn-cream" id="aiSpotMap">✨ 智能推荐去处</button>'
+    + '<button class="btn btn-primary" id="addPin">+ 手动打卡</button>'
+    + '</div>'
+    + '<div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: var(--blue-dark);">💡 输入店名/地址搜索定位后点「打卡」；好评在地图上显示<b>绿色微笑猫</b>，差评显示<b>蓝色哭哭猫</b>。'
+    + (hasKey ? '' : ' 当前未填 Key，地图走本地代理模式，仅本机可用。') + '</div>'
+    + '<div class="map-wrap">'
+    + '<div class="map-panel">'
+    + '<div class="map-toolbar">'
+    + '<input class="form-input map-search" id="mapSearch" placeholder="输入店名 / 地址，如：广州陶陶居">'
+    + '<button class="btn btn-primary" id="mapLocate">定位</button>'
+    + '</div>'
+    + '<div id="mapContainer" class="map-canvas"></div>'
+    + '<div class="map-legend">'
+    + '<span class="map-legend-item"><img src="' + catMarkerDataUrl('good') + '" width="22" height="22" alt=""> 好评</span>'
+    + '<span class="map-legend-item"><img src="' + catMarkerDataUrl('bad') + '" width="22" height="22" alt=""> 差评</span>'
+    + '<span style="margin-left:auto;">滚轮缩放 · 拖拽移动</span>'
+    + '</div></div>'
+    + '<div class="map-side">'
+    + '<div class="map-side-head"><div style="font-size:14px;font-weight:600;color:var(--text);">我的打卡</div>'
+    + '<div style="font-size:12px;color:var(--text-light);">' + all.length + ' 条</div></div>'
+    + '<div class="map-filters">'
+    + '<button class="map-filter ' + (mapFilter === 'all' ? 'active' : '') + '" data-mapfilter="all">全部</button>'
+    + '<button class="map-filter ' + (mapFilter === 'good' ? 'active' : '') + '" data-mapfilter="good">好评 ' + goodCount + '</button>'
+    + '<button class="map-filter ' + (mapFilter === 'bad' ? 'active' : '') + '" data-mapfilter="bad">差评 ' + badCount + '</button>'
+    + '</div>' + list
+    + '</div></div>';
+}
+
+function openPinForm(id, preset) {
+  const arr = getMapPins();
+  const item = id ? arr.find(p => p.id === id) : null;
+  const d = item || { name: (preset && preset.name) || '', address: (preset && preset.address) || '', lat: (preset && preset.lat) || null, lng: (preset && preset.lng) || null, note: '', image: '', rating: 'good', date: today() };
+  const good = (d.rating || 'good') !== 'bad';
+  const html = makeModal(id ? '编辑打卡' : '新增打卡', `
+    <div class="form-row"><label class="form-label">名称 *</label><input class="form-input" id="f_name" value="${escapeHtml(d.name || '')}" placeholder="如：陶陶居 · 珠江边店"></div>
+    <div class="form-row"><label class="form-label">匹配地址</label>
+      <div style="display:flex;gap:8px;">
+        <input class="form-input" id="f_address" value="${escapeHtml(d.address || '')}" placeholder="输入地址后点「定位」获取坐标" style="flex:1;">
+        <button class="btn btn-cream btn-sm" id="f_locate" type="button">定位</button>
+      </div>
+      <div class="form-hint" id="f_coordHint">${d.lat && d.lng ? '已定位：' + Number(d.lat).toFixed(5) + ', ' + Number(d.lng).toFixed(5) : '未定位（不影响保存，但不会显示地图标记）'}</div>
+    </div>
+    <div class="form-row"><label class="form-label">打卡图片</label>
+      <input type="file" id="f_imageFile" accept="image/*" style="display:none">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-cream btn-sm" id="f_imageBtn" type="button">${d.image ? '更换图片' : '上传图片'}</button>
+        ${d.image ? '<button class="btn btn-ghost btn-sm" id="f_imageClear" type="button">清除</button>' : ''}
+      </div>
+      <div id="f_imagePreview" style="margin-top:8px;">${d.image ? '<img src="' + d.image + '" style="max-width:100%;border-radius:8px;max-height:180px;object-fit:cover;">' : ''}</div>
+    </div>
+    <div class="form-row"><label class="form-label">打卡感受</label><textarea class="form-textarea" id="f_note" placeholder="好吃吗？值不值得再去？">${escapeHtml(d.note || '')}</textarea></div>
+    <div class="form-row"><label class="form-label">评价</label>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" id="f_good" type="button" style="${good ? 'background:#D5F0DC;border-color:#2D8659;color:#2D8659;' : ''}">好评 · 微笑猫</button>
+        <button class="btn btn-sm" id="f_bad" type="button" style="${!good ? 'background:#F5D5D3;border-color:#D9534F;color:#D9534F;' : ''}">差评 · 哭哭猫</button>
+      </div>
+    </div>
+    <div class="form-actions">
+      ${id ? '<button class="btn btn-ghost" id="f_del" type="button" style="color:var(--red);border-color:var(--red);">删除</button>' : ''}
+      <button class="btn btn-primary" id="saveBtn">保存</button>
+      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+    </div>`);
+  openModal(html);
+  let imageData = d.image || '';
+  let rating = good ? 'good' : 'bad';
+  let lat = d.lat || null, lng = d.lng || null;
+
+  $('#f_imageBtn').onclick = () => $('#f_imageFile').click();
+  $('#f_imageFile').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    compressImage(file, 800).then(b64 => {
+      imageData = b64;
+      $('#f_imagePreview').innerHTML = '<img src="' + b64 + '" style="max-width:100%;border-radius:8px;max-height:180px;object-fit:cover;">';
+    }).catch(err => toast('图片处理失败：' + err.message, 'error'));
+  };
+  const clr = $('#f_imageClear');
+  if (clr) clr.onclick = () => { imageData = ''; $('#f_imagePreview').innerHTML = ''; clr.remove(); };
+  $('#f_good').onclick = () => { rating = 'good'; $('#f_good').style.cssText = 'background:#D5F0DC;border-color:#2D8659;color:#2D8659;'; $('#f_bad').style.cssText = ''; };
+  $('#f_bad').onclick = () => { rating = 'bad'; $('#f_bad').style.cssText = 'background:#F5D5D3;border-color:#D9534F;color:#D9534F;'; $('#f_good').style.cssText = ''; };
+  $('#f_locate').onclick = () => {
+    const addr = $('#f_address').value.trim();
+    if (!addr) { toast('请先填写地址', 'error'); return; }
+    toast('定位中…', 'info');
+    geocodeAddress(addr, (loc, info) => {
+      if (!loc) {
+        const hint = info && info.error ? ('（' + info.error + '）') : '';
+        const suggestion = !getTmapKey() ? '当前未填 Key，请先在设置页填写腾讯地图 Key。' : (info && info.searched ? '可换个更完整的地址/店名再试。' : '请检查 Key 是否为「Web端 JavaScript API」类型，以及域名白名单是否包含当前地址。');
+        toast('没能定位到这个地址' + hint, 'error');
+        $('#f_coordHint').innerHTML = '<span style="color:var(--red);">未定位' + hint + '</span><br><span style="font-size:12px;">' + suggestion + '</span>';
+        return;
+      }
+      lat = loc.lat; lng = loc.lng;
+      $('#f_coordHint').innerHTML = '已定位：' + Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5) + (info && info.source ? ' <span style="font-size:12px;color:var(--text-light);">via ' + info.source + '</span>' : '');
+      toast('定位成功', 'success');
+      mapFlyTo(lat, lng, 15);
+    });
+  };
+  const del = $('#f_del');
+  if (del) del.onclick = () => {
+    closeModal();
+    confirm2('确认删除', '确定要删除这条打卡记录吗？', () => {
+      saveMapPins(getMapPins().filter(p => p.id !== id));
+      toast('已删除', 'success'); render();
+    });
+  };
+  $('#saveBtn').onclick = () => {
+    const obj = {
+      id: id || uid(),
+      name: $('#f_name').value.trim(),
+      address: $('#f_address').value.trim(),
+      lat: lat, lng: lng,
+      image: imageData,
+      note: $('#f_note').value.trim(),
+      rating: rating,
+      date: d.date || today()
+    };
+    if (!obj.name) { toast('请填写名称', 'error'); return; }
+    const list = getMapPins();
+    if (id) { const i = list.findIndex(p => p.id === id); if (i >= 0) list[i] = obj; }
+    else list.unshift(obj);
+    saveMapPins(list);
+    toast('已保存', 'success'); closeModal(); render();
+  };
+}
+
+function openPinDetail(id) {
+  const p = getMapPins().find(x => x.id === id);
+  if (!p) return;
+  const good = (p.rating || 'good') !== 'bad';
+  const html = makeModal(p.name || '打卡详情', `
+    ${p.image ? '<img src="' + p.image + '" style="width:100%;border-radius:10px;max-height:220px;object-fit:cover;margin-bottom:12px;">' : ''}
+    <div style="margin-bottom:8px;"><span class="map-tag ${good ? 'good' : 'bad'}">${good ? '好评' : '差评'}</span> <span style="font-size:12px;color:var(--text-light);">${p.date || ''}</span></div>
+    ${p.address ? '<div style="font-size:13px;color:var(--text-light);margin-bottom:8px;">📍 ' + escapeHtml(p.address) + '</div>' : ''}
+    ${p.note ? '<div style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;">' + escapeHtml(p.note) + '</div>' : '<div style="font-size:13px;color:var(--text-light);">暂无感受记录</div>'}
+    <div class="form-actions">
+      <button class="btn btn-primary" id="pdEdit">编辑</button>
+      ${p.lat && p.lng ? '<button class="btn btn-cream" id="pdFly">在地图定位</button>' : ''}
+      <button class="btn btn-ghost" onclick="closeModal()">关闭</button>
+    </div>`);
+  openModal(html);
+  $('#pdEdit').onclick = () => { closeModal(); openPinForm(id); };
+  const fly = $('#pdFly');
+  if (fly) fly.onclick = () => { closeModal(); mapFlyTo(p.lat, p.lng, 16); };
+}
+
+function mapSearchLocate() {
+  const el = $('#mapSearch');
+  const q = el ? el.value.trim() : '';
+  if (!q) { toast('请输入店名或地址', 'error'); return; }
+  toast('定位中…', 'info');
+  geocodeAddress(q, (loc, info) => {
+    if (!loc) {
+      const hint = info && info.error ? ('（' + info.error + '）') : '';
+      const suggestion = !getTmapKey() ? '当前未填 Key，请先在设置页填写腾讯地图 Key。' : '可换更完整的地址/店名，或检查 Key 类型与域名白名单。';
+      toast('没能定位到' + hint, 'error');
+      console.log('[地图] 搜索失败', info);
+      return;
+    }
+    mapFlyTo(loc.lat, loc.lng, 16);
+    toast('已定位，点「+ 手动打卡」可记录', 'success');
+    openPinForm(null, { name: q, address: (info && info.title) || q, lat: loc.lat, lng: loc.lng });
+  });
+}
+
+let aiSpotTags = [];
+function openAiSpotModal() {
+  aiSpotTags = [];
+  const html = makeModal('智能推荐去处', `
+    <div class="form-row"><label class="form-label">城市 *</label><input class="form-input" id="as_city" placeholder="如：广州"></div>
+    <div class="form-row"><label class="form-label">想去哪种（可多选）</label>
+      <div class="map-chips">${MAP_CATS.map(c => `<button class="map-chip" type="button" data-cat="${c.key}">${c.label}</button>`).join('')}</div>
+    </div>
+    <div class="form-row"><label class="form-label">补充要求（可选）</label><input class="form-input" id="as_extra" placeholder="如：想看江景，人均 150 以内"></div>
+    <div class="form-actions"><button class="btn btn-primary" id="as_go">开始推荐</button><button class="btn btn-ghost" onclick="closeModal()">取消</button></div>`);
+  openModal(html);
+  $$('#modalContainer .map-chip').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.cat;
+      const c = mapCatOf(k);
+      if (aiSpotTags.includes(k)) { aiSpotTags = aiSpotTags.filter(x => x !== k); b.className = 'map-chip'; b.style.cssText = ''; }
+      else { aiSpotTags.push(k); b.className = 'map-chip on'; b.style.cssText = 'background:' + c.bg + ';border-color:' + c.bd + ';color:' + c.tx + ';'; }
+    };
+  });
+  $('#as_go').onclick = () => {
+    const city = $('#as_city').value.trim();
+    if (!city) { toast('请填写城市', 'error'); return; }
+    if (!aiSpotTags.length) { toast('至少选一个方向', 'error'); return; }
+    closeModal();
+    runAiSpot(city, aiSpotTags.slice(), $('#as_extra').value.trim());
+  };
+}
+
+async function runAiSpot(city, tags, extra) {
+  const api = STORAGE.get('api', {});
+  if (!api.url || !api.key) { toast('请先在设置里配置 AI 模型', 'error'); return; }
+  const label = tags.map(t => mapCatOf(t).label).join(' / ');
+  toast('AI 正在联网搜索推荐…', 'info');
+  const prompt = `请推荐 3 个「${city}」的${label}去处。${extra ? '补充要求：' + extra + '。' : ''}
+要求：
+1. 必须是真实存在、可导航到的地点，名称准确（含分店/园区名请写清）
+2. 每条的【简介】一句话说清它是什么、为什么值得去，30 字以内
+3. 每条的【补充】写人均消费或门票、所在城区、适合时段等实用信息
+4. 不要输出 markdown 标题，严格按以下格式输出 3 条，用 "=====地点2=====" 和 "=====地点3=====" 分隔：
+
+【地点 1】
+【名称】
+【简介】
+【补充】
+
+=====地点2=====
+
+【地点 2】
+【名称】
+【简介】
+【补充】
+
+=====地点3=====
+
+【地点 3】
+【名称】
+【简介】
+【补充】
+
+请直接输出，不要寒暄。`;
+  const r = await awaitAIModel(api, '地点推荐', prompt, ['你是熟悉中国城市吃喝玩乐的本地生活编辑，推荐真实、具体、可导航的去处。'], '', true, city + ' ' + label + ' 推荐去处');
+  if (!r || !r.content) { toast('AI 没有返回结果，请稍后重试', 'error'); return; }
+  const parts = r.content.split(/=====\s*地点\s*[23]\s*=====/i);
+  const recs = [];
+  parts.forEach(part => {
+    const s = extractSections(part, ['名称', '简介', '补充']);
+    const name = (s['名称'] || '').trim();
+    if (!name) return;
+    recs.push({ name: name, desc: (s['简介'] || '').trim(), meta: (s['补充'] || '').trim() });
+  });
+  if (!recs.length) { toast('没能解析出推荐结果，请重试', 'error'); return; }
+  showAiSpotResults(city, recs.slice(0, 3));
+}
+
+function showAiSpotResults(city, recs) {
+  toast('正在用地图校准坐标…', 'info');
+  const done = [];
+  let pending = recs.length;
+  recs.forEach((rec, idx) => {
+    geocodeAddress(city + rec.name, (loc) => {
+      rec.lat = loc ? loc.lat : null;
+      rec.lng = loc ? loc.lng : null;
+      rec.cat = aiSpotTags[idx % Math.max(aiSpotTags.length, 1)] || 'food';
+      done.push(rec);
+      pending--;
+      if (pending === 0) renderAiSpotResults(city, recs);
+    });
+  });
+}
+
+function renderAiSpotResults(city, recs) {
+  const cards = recs.map((rec, i) => {
+    const c = mapCatOf(rec.cat);
+    return '<div class="map-rec-card" style="background:' + c.bg + ';border:1px solid ' + c.bd + ';">'
+      + '<div class="map-rec-thumb" style="background:' + c.bd + ';">'
+      + '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="' + c.tx + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+      + '</div>'
+      + '<div class="map-rec-main"><div class="map-rec-title">' + escapeHtml(rec.name) + '</div>'
+      + '<div class="map-rec-desc">' + escapeHtml(rec.desc || '') + '</div>'
+      + '<div class="map-rec-meta">' + escapeHtml(rec.meta || '') + (rec.lat ? '' : ' · 未定位到坐标') + '</div></div>'
+      + '<div class="map-rec-acts">'
+      + (rec.lat ? '<button class="map-rec-btn" data-reclocate="' + i + '">定位</button>' : '')
+      + '<button class="map-rec-btn go" data-reccheckin="' + i + '">打卡</button>'
+      + '</div></div>';
+  }).join('');
+  const html = makeModal('AI 推荐 · ' + city, `
+    <div style="font-size:12px;color:var(--text-light);margin-bottom:12px;">大模型联网推荐 · 已用腾讯地图校准真实坐标 · 点「定位」飞到地图，点「打卡」直接记录</div>
+    ${cards}
+    <div class="form-actions"><button class="btn btn-ghost" onclick="closeModal()">关闭</button></div>`);
+  openModal(html);
+  $$('#modalContainer [data-reclocate]').forEach(b => b.onclick = () => {
+    const rec = recs[Number(b.dataset.reclocate)];
+    closeModal(); mapFlyTo(rec.lat, rec.lng, 16);
+  });
+  $$('#modalContainer [data-reccheckin]').forEach(b => b.onclick = () => {
+    const rec = recs[Number(b.dataset.reccheckin)];
+    closeModal();
+    openPinForm(null, { name: rec.name, address: city + rec.name, lat: rec.lat, lng: rec.lng });
+  });
+}
+
+function saveTmapSettings() {
+  const el = $('#tmapKey');
+  if (!el) return;
+  const v = el.value.trim();
+  STORAGE.set('tmapKey', v);
+  tmapLoaded = false; tmapFailed = false; tmap = null; tmapMarkers = null;
+  toast(v ? '地图 Key 已保存' : '已清空 Key，将使用本地代理模式', 'success');
+  render();
+}
+
 // ===== 事件绑定 =====
 function bindEvents() {
   $$('.nav-item').forEach(n => n.onclick = () => switchSection(n.dataset.section));
@@ -2748,12 +3412,35 @@ function bindEvents() {
   bind('addTask', () => openTaskForm());
   bind('addIdea', () => openIdeaForm());
   bind('addBook', () => openBookForm());
-  bind('addSpot', () => openSpotForm());
+  bind('addPin', () => openPinForm(null, null));
+  bind('aiSpotMap', () => openAiSpotModal());
+  bind('mapLocate', () => mapSearchLocate());
+  bind('saveTmap', () => saveTmapSettings());
+  bind('testTmap', () => {
+    const key = getTmapKey();
+    if (!key) { toast('请先填写腾讯地图 Key', 'error'); return; }
+    toast('正在测试 Key 与定位服务…', 'info');
+    geocodeAddress('北京市天安门', (loc, info) => {
+      if (loc) {
+        toast('定位服务正常：' + Number(loc.lat).toFixed(4) + ', ' + Number(loc.lng).toFixed(4) + ' via ' + (info.source || 'geocoder'), 'success');
+      } else {
+        const err = (info && info.error) || '未知错误';
+        const isWhitelist = err.indexOf('域名') >= 0 || err.indexOf('白名单') >= 0 || err.indexOf('授权') >= 0 || err.indexOf('JSONP') >= 0;
+        const extra = isWhitelist ? '当前域名可能不在腾讯控制台白名单内。本地预览请务必加 127.0.0.1:* 和 localhost:*。' : '请检查 Key 是否启用 WebServiceAPI / SDK，以及域名白名单。';
+        toast('定位测试失败：' + err + '。' + extra, 'error');
+        console.log('[地图] 测试定位失败详情:', info);
+      }
+    });
+  });
+  const msEl = $('#mapSearch');
+  if (msEl) msEl.onkeydown = (e) => { if (e.key === 'Enter') mapSearchLocate(); };
+  $$('[data-mapfilter]').forEach(b => b.onclick = () => { mapFilter = b.dataset.mapfilter; render(); });
+  $$('[data-pin]').forEach(b => b.onclick = () => openPinDetail(b.dataset.pin));
+  if (currentSection === 'life' && (currentSubtab.life || 'books') === 'map') initMapCheckin();
   bind('addEssay', () => openEssayForm());
   bind('addTopic', () => openTopicForm());
   bind('aiTopic', () => aiGenerate('topic'));
   bind('aiBook', () => aiGenerate('book'));
-  bind('aiSpot', () => aiGenerate('spot'));
   bind('aiWorkout', () => aiGenerate('workout'));
   bind('addWorkoutDay', () => {
     const plans = STORAGE.get('workouts', []);
@@ -2813,7 +3500,7 @@ function handleDelete(section, sub, id) {
     'career|': { cases: 'cases', trends: 'trends', ai: 'ai_news', ent: 'ent' },
     'job|': { apps: 'jobs', resumes: 'resumes' },
     'academic|': { papers: 'papers', tasks: 'tasks', ideas: 'ideas' },
-    'life|': { books: 'books', spots: 'spots', essays: 'essays', topics: 'topics' }
+    'life|': { books: 'books', map: 'mapPins', essays: 'essays', topics: 'topics' }
   };
   const storage = (map[`${section}|`] || {})[sub];
   if (!storage) { toast('删除配置错误', 'error'); return; }
@@ -2838,7 +3525,7 @@ function handleEdit(section, sub, id) {
     'career|cases': openCaseForm, 'career|trends': openTrendForm, 'career|ai': openAIForm, 'career|ent': openEntForm,
     'job|apps': openJobForm, 'job|resumes': openResumeForm,
     'academic|papers': openPaperForm, 'academic|tasks': openTaskForm, 'academic|ideas': openIdeaForm,
-    'life|books': openBookForm, 'life|spots': openSpotForm, 'life|essays': openEssayForm, 'life|topics': openTopicForm
+    'life|books': openBookForm, 'life|map': openPinForm, 'life|essays': openEssayForm, 'life|topics': openTopicForm
   };
   const fn = map[`${section}|${sub}`];
   if (fn) fn(id);
