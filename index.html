@@ -2924,41 +2924,57 @@ function enrichWsError(msg) {
   return msg;
 }
 
-function geocodeByWebService(addr, cb) {
+function geocodeByWebService(addr, cb, hintName) {
   const key = getTmapKey();
   if (!key) { cb(null, { error: '未填 Key' }); return; }
+  const tryPlaceSearch = (keyword, onFail) => {
+    console.log('[地图] WebService 尝试 POI 搜索:', keyword);
+    jsonpRequest('https://apis.map.qq.com/ws/place/v1/search?keyword=' + encodeURIComponent(keyword) + '&boundary=region(%E5%85%A8%E5%9B%BD,0)&page_size=5&key=' + encodeURIComponent(key) + '&output=jsonp', (res, err) => {
+      if (err) { onFail(err); return; }
+      const r = parseWsResult(res);
+      console.log('[地图] WebService Search 解析:', r);
+      if (!r.ok) { onFail({ error: '地点搜索：' + enrichWsError(r.message) }); return; }
+      const list = res.data;
+      if (!list || !list.length) { onFail({ error: 'WebServiceAPI 未找到匹配地点' }); return; }
+      const first = list[0];
+      if (first && first.location) {
+        cb({ lat: first.location.lat, lng: first.location.lng }, { source: 'ws:search', title: first.title });
+        return;
+      }
+      onFail({ error: 'WebServiceAPI 搜索结果缺少坐标' });
+    });
+  };
+
   console.log('[地图] 尝试 WebServiceAPI 地址解析:', addr);
   jsonpRequest('https://apis.map.qq.com/ws/geocoder/v1/?address=' + encodeURIComponent(addr) + '&key=' + encodeURIComponent(key) + '&output=jsonp', (res, err) => {
-    if (err) { cb(null, err); return; }
+    if (err) {
+      // 网络/域名问题：尝试用店名做 POI 搜索碰碰运气
+      if (hintName && hintName !== addr) tryPlaceSearch(hintName, () => cb(null, err));
+      else cb(null, err);
+      return;
+    }
     const r1 = parseWsResult(res);
     console.log('[地图] WebService Geocoder 解析:', r1);
     if (r1.ok && res.result && res.result.location) {
       cb({ lat: res.result.location.lat, lng: res.result.location.lng }, { source: 'ws:geocoder' });
       return;
     }
-    if (!r1.ok) {
-      cb(null, { error: '地址解析：' + enrichWsError(r1.message), searched: true });
-      return;
-    }
-    console.log('[地图] WebService Geocoder 无结果，尝试 POI 搜索');
-    jsonpRequest('https://apis.map.qq.com/ws/place/v1/search?keyword=' + encodeURIComponent(addr) + '&boundary=region(%E5%85%A8%E5%9B%BD,0)&page_size=5&key=' + encodeURIComponent(key) + '&output=jsonp', (res2, err2) => {
-      if (err2) { cb(null, err2); return; }
-      const r2 = parseWsResult(res2);
-      console.log('[地图] WebService Search 解析:', r2);
-      if (!r2.ok) { cb(null, { error: '地点搜索：' + enrichWsError(r2.message), searched: true }); return; }
-      const list = res2.data;
-      if (!list || !list.length) { cb(null, { error: 'WebServiceAPI 未找到匹配地点', searched: true }); return; }
-      const first = list[0];
-      if (first && first.location) {
-        cb({ lat: first.location.lat, lng: first.location.lng }, { source: 'ws:search', title: first.title });
-        return;
+    // Geocoder 失败也 fallback 到 POI 搜索（参数错误/地址不完整时尤其需要）
+    const failMsg = r1.ok ? 'WebService Geocoder 无结果' : ('地址解析：' + enrichWsError(r1.message));
+    console.log('[地图]', failMsg, '，fallback 到 POI 搜索');
+    tryPlaceSearch(addr, (err1) => {
+      if (hintName && hintName !== addr) {
+        tryPlaceSearch(hintName, (err2) => {
+          cb(null, { error: err2.error + '；' + failMsg, searched: true });
+        });
+      } else {
+        cb(null, Object.assign({}, err1, { error: err1.error + '；' + failMsg, searched: true }));
       }
-      cb(null, { error: 'WebServiceAPI 搜索结果缺少坐标', searched: true });
     });
   });
 }
 
-function geocodeAddress(addr, cb) {
+function geocodeAddress(addr, cb, hintName) {
   loadTMap((ok) => {
     if (!ok || !window.TMap || !window.TMap.service) {
       const reason = !ok ? 'SDK 加载失败' : (!window.TMap ? 'window.TMap 不存在' : 'window.TMap.service 不存在（SDK 未启用或 libraries=service 未生效）');
@@ -2967,7 +2983,7 @@ function geocodeAddress(addr, cb) {
       geocodeByWebService(addr, (loc, info) => {
         if (!loc) info = Object.assign({}, info || {}, { error: (info && info.error ? info.error + '；' : '') + reason });
         cb(loc, info);
-      });
+      }, hintName);
       return;
     }
     const onLoc = (loc, source, title) => {
@@ -3007,13 +3023,13 @@ function geocodeAddress(addr, cb) {
       // 第二步：POI 搜索（适合店名/地点名，如 "jpg canteen"）
       try {
         const SearchCls = window.TMap.service.Search;
-        if (!SearchCls) { geocodeByWebService(addr, cb); return; }
+        if (!SearchCls) { geocodeByWebService(addr, cb, hintName); return; }
         const search = new SearchCls();
         console.log('[地图] Search 实例方法:', Object.keys(search).filter(k => typeof search[k] === 'function').join(', '));
         const searchFn = search.search || search.searchByKeyword || search.searchByRegion || search.searchByArea;
         if (!searchFn) {
           console.warn('[地图] Search 实例没有可用搜索方法，跳过 JS SDK Search');
-          geocodeByWebService(addr, cb);
+          geocodeByWebService(addr, cb, hintName);
           return;
         }
         const opts = search.search ? { keyword: addr, region: '', page_size: 5 }
@@ -3024,25 +3040,25 @@ function geocodeAddress(addr, cb) {
           const status = res && (res.status != null ? res.status : res.code);
           if (status !== 0 && status !== '0' && status !== 200) {
             console.warn('[地图] Search 返回非成功状态:', status, res && res.message);
-            geocodeByWebService(addr, cb);
+            geocodeByWebService(addr, cb, hintName);
             return;
           }
           const list = res && (res.data || res.results || res.result);
           if (!list || !list.length) {
             console.warn('[地图] Search 无结果');
-            geocodeByWebService(addr, cb);
+            geocodeByWebService(addr, cb, hintName);
             return;
           }
           const first = list[0];
           if (onLoc(first.location || (first.lat != null && first.lng != null ? { lat: first.lat, lng: first.lng } : null), 'search', first.title || first.name)) return;
-          geocodeByWebService(addr, cb);
+          geocodeByWebService(addr, cb, hintName);
         }).catch(err => {
           console.error('[地图] Search 调用异常:', err);
-          geocodeByWebService(addr, cb);
+          geocodeByWebService(addr, cb, hintName);
         });
       } catch (e) {
         console.error('[地图] Search 构造异常:', e);
-        geocodeByWebService(addr, cb);
+        geocodeByWebService(addr, cb, hintName);
       }
     }
   });
@@ -3109,7 +3125,7 @@ function openPinForm(id, preset) {
     <div class="form-row"><label class="form-label">名称 *</label><input class="form-input" id="f_name" value="${escapeHtml(d.name || '')}" placeholder="如：陶陶居 · 珠江边店"></div>
     <div class="form-row"><label class="form-label">匹配地址</label>
       <div style="display:flex;gap:8px;">
-        <input class="form-input" id="f_address" value="${escapeHtml(d.address || '')}" placeholder="输入地址后点「定位」获取坐标" style="flex:1;">
+        <input class="form-input" id="f_address" value="${escapeHtml(d.address || '')}" placeholder="建议带城市，如「广州市新港西路173号」" style="flex:1;">
         <button class="btn btn-cream btn-sm" id="f_locate" type="button">定位</button>
       </div>
       <div class="form-hint" id="f_coordHint">${d.lat && d.lng ? '已定位：' + Number(d.lat).toFixed(5) + ', ' + Number(d.lng).toFixed(5) : '未定位（不影响保存，但不会显示地图标记）'}</div>
@@ -3154,12 +3170,13 @@ function openPinForm(id, preset) {
   $('#f_bad').onclick = () => { rating = 'bad'; $('#f_bad').style.cssText = 'background:#F5D5D3;border-color:#D9534F;color:#D9534F;'; $('#f_good').style.cssText = ''; };
   $('#f_locate').onclick = () => {
     const addr = $('#f_address').value.trim();
+    const name = $('#f_name').value.trim();
     if (!addr) { toast('请先填写地址', 'error'); return; }
     toast('定位中…', 'info');
     geocodeAddress(addr, (loc, info) => {
       if (!loc) {
         const hint = info && info.error ? ('（' + info.error + '）') : '';
-        const suggestion = !getTmapKey() ? '当前未填 Key，请先在设置页填写腾讯地图 Key。' : (info && info.searched ? '可换个更完整的地址/店名再试。' : '请检查 Key 是否为「Web端 JavaScript API」类型，以及域名白名单是否包含当前地址。');
+        const suggestion = !getTmapKey() ? '当前未填 Key，请先在设置页填写腾讯地图 Key。' : '可换个更完整的地址（建议加上城市，如「广州市新港西路173号」）/店名再试。';
         toast('没能定位到这个地址' + hint, 'error');
         $('#f_coordHint').innerHTML = '<span style="color:var(--red);">未定位' + hint + '</span><br><span style="font-size:12px;">' + suggestion + '</span>';
         return;
@@ -3168,7 +3185,7 @@ function openPinForm(id, preset) {
       $('#f_coordHint').innerHTML = '已定位：' + Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5) + (info && info.source ? ' <span style="font-size:12px;color:var(--text-light);">via ' + info.source + '</span>' : '');
       toast('定位成功', 'success');
       mapFlyTo(lat, lng, 15);
-    });
+    }, name);
   };
   const del = $('#f_del');
   if (del) del.onclick = () => {
@@ -3226,7 +3243,7 @@ function mapSearchLocate() {
   geocodeAddress(q, (loc, info) => {
     if (!loc) {
       const hint = info && info.error ? ('（' + info.error + '）') : '';
-      const suggestion = !getTmapKey() ? '当前未填 Key，请先在设置页填写腾讯地图 Key。' : '可换更完整的地址/店名，或检查 Key 类型与域名白名单。';
+      const suggestion = !getTmapKey() ? '当前未填 Key，请先在设置页填写腾讯地图 Key。' : '可换更完整的地址/店名（建议加上城市，如「广州陶陶居」），或检查 Key 类型与域名白名单。';
       toast('没能定位到' + hint, 'error');
       console.log('[地图] 搜索失败', info);
       return;
