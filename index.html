@@ -2511,8 +2511,15 @@ function renderWeekly() {
   const taskCount = {};
   data.tasks.forEach(tk => { taskCount[tk.date] = (taskCount[tk.date] || 0) + 1; });
 
-  const monDate = new Date(mon + 'T00:00:00');
-  const y = monDate.getFullYear(), m = monDate.getMonth();
+  // 日历月份：本周固定显示「今天」所在月份；翻到其他周时按 ISO 规则取该周周四所在月份
+  let y, m;
+  if (weekOffset === 0) {
+    const td = new Date(t + 'T00:00:00');
+    y = td.getFullYear(); m = td.getMonth();
+  } else {
+    const thu = new Date(addDays(mon, 3) + 'T00:00:00');
+    y = thu.getFullYear(); m = thu.getMonth();
+  }
   const startDow = new Date(y, m, 1).getDay();
   const daysInMonth = new Date(y, m + 1, 0).getDate();
 
