@@ -1592,7 +1592,7 @@ function renderJobApps() {
     offer: { label: 'Offer', cls: 'status-offer' },
     rejected: { label: '已拒绝', cls: 'status-rejected' }
   };
-  return `<div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;"><button class="btn btn-primary" id="addJob">+ 新增投递</button></div>
+  return `<div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;"><button class="btn btn-primary" id="addJob">+ 新增投递</button><button class="btn btn-cream" id="extractJob">📋 智能提取</button></div>
     <div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: var(--blue-dark);">💡 填写官网链接后可一键跳转查看进度；进度时间线记录每个阶段的日期和详情</div>
     ${list.length === 0 ? `<div class="list-empty"><div class="list-empty-icon">💼</div>还没有投递记录</div>` : `
     <div class="job-table">
@@ -2200,6 +2200,7 @@ function renderSettings() {
   const api = STORAGE.get('api', { url: '', key: '', model: '' });
   const total = STORAGE.totalCount();
   const size = STORAGE.totalSize();
+  const dedupStat = getDedupStat();
   return `<div class="section-header"><svg class="section-icon" viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="#A8C5E0" stroke="#3A3A3A" stroke-width="2.5"/><circle cx="50" cy="50" r="12" fill="white" stroke="#3A3A3A" stroke-width="2.5"/><line x1="50" y1="20" x2="50" y2="10" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/><line x1="50" y1="80" x2="50" y2="90" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/><line x1="20" y1="50" x2="10" y2="50" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/><line x1="80" y1="50" x2="90" y2="50" stroke="#3A3A3A" stroke-width="2.5" stroke-linecap="round"/></svg><div class="section-title">设置</div></div>
     <div class="settings-section"><div class="settings-section-title">AI 模型配置</div><div class="card">
       <div class="form-row"><label class="form-label">API 地址 <span class="req">*</span></label><input class="form-input" id="apiUrl" value="${escapeHtml(api.url)}" placeholder="https://api.deepseek.com/v1/chat/completions"><div class="form-hint">支持 OpenAI 兼容接口：DeepSeek、月之暗面、智谱、OpenAI、通义等</div></div>
@@ -2227,6 +2228,11 @@ function renderSettings() {
         安全性说明：Key 只存在你自己浏览器的 localStorage 里，不进文件也不进 GitHub，留空白名单的实际风险很低；腾讯还有每日调用额度兜底。
       </div>
       <div class="form-actions"><button class="btn btn-primary" id="saveTmap">保存地图配置</button><button class="btn btn-cream" id="testTmap">测试定位</button></div>
+    </div></div>
+    <div class="settings-section"><div class="settings-section-title">AI 去重记录</div><div class="card">
+      <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light);">🔁 当前已记录 <b>${dedupStat.keys}</b> 个搜索关键词 · 共 <b>${dedupStat.items}</b> 条已产出内容</div>
+      <div style="font-size: 12px; color: var(--text-light); line-height: 1.7; margin-bottom: 12px;">AI 生成时会把「关键词 → 已产出内容」记下来，下次用相同或相近关键词（如"宠物经济"与"宠物行业"视为同一个）搜索时，会强制要求换新的案例/趋势，避免重复。清空后去重从零开始。</div>
+      <div class="form-actions"><button class="btn btn-ghost" id="viewDedup">查看记录</button><button class="btn btn-ghost" id="clearDedup">清空去重记录</button></div>
     </div></div>
     <div class="settings-section"><div class="settings-section-title">数据备份</div><div class="card">
       <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-light);">📊 当前数据：${total} 条记录 · 占用空间约 ${(size / 1024).toFixed(1)} KB</div>
@@ -3417,6 +3423,7 @@ function bindEvents() {
   bind('aiEnt', () => aiGenerate('ent'));
   bind('addEnt', () => openEntForm());
   bind('addJob', () => openJobForm());
+  bind('extractJob', () => openJobExtract());
   bind('addResume', () => openResumeForm());
   bind('addFeishu', () => openFeishuForm());
   bind('importFeishu', () => openFeishuImport());
@@ -3509,6 +3516,8 @@ function bindEvents() {
   bind('exportBtn', exportData);
   bind('clearAll', clearAllData);
   bind('loadDemo', loadDemoData);
+  bind('viewDedup', () => viewDedupLog());
+  bind('clearDedup', clearDedupLog);
   const importBtn = $('#importBtn'); if (importBtn) { importBtn.onclick = () => $('#importFile').click(); $('#importFile').onchange = importData; }
 
   $$('[data-download]').forEach(b => b.onclick = () => downloadResume(b.dataset.download));
@@ -3879,6 +3888,193 @@ function rebindTimelineDels() {
     b.closest('.tl-row').remove();
     rebindTimelineDels();
   });
+}
+
+// ===== 求职中心：智能提取（粘贴批量分解写入投递记录） =====
+function parseJsonArrayFromText(str) {
+  if (!str) return null;
+  try { const s = str.trim(); if (s.startsWith('[')) return JSON.parse(s); } catch (e) {}
+  const m = str.match(/\[[\s\S]*\]/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (e) { return null; }
+}
+
+// 离线确定性解析：支持 Excel 复制（Tab）、CSV、逗号/空格分隔、带表头
+function parseJobBatch(text) {
+  if (!text || !text.trim()) return [];
+  const lines = text.replace(/\r/g, '').split('\n').map(s => s.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const URL_RE = /(https?:\/\/[^\s，,；;，]+|www\.[^\s，,；;，]+)/i;
+  const CITY_RE = /(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|苏州|重庆|天津|长沙|青岛|东莞|宁波|佛山|合肥|郑州|无锡|厦门|福州|济南|大连|珠海|中山|常州|昆明|南昌|沈阳|石家庄|哈尔滨|太原|南宁|贵阳|海口|兰州|银川|西宁|呼和浩特|乌鲁木齐|拉萨|香港|澳门|台北|台湾|远程|异地|海外|全国|不限|多地|base)/;
+  const HEADER_KW = ['公司', '岗位', '职务', '职位', '地点', '城市', '官网', '链接', '网址', 'url', '主页', '网站', '企业', '单位'];
+  // 表头识别
+  let headerMap = null;
+  const firstTokens = lines[0].split(/\t|[，,；;、]/).map(s => s.trim()).filter(Boolean);
+  const joined = firstTokens.join('');
+  if (firstTokens.length >= 2 && HEADER_KW.some(k => joined.includes(k))) {
+    headerMap = firstTokens.map(t => {
+      if (/公司|企业|单位/.test(t)) return 'company';
+      if (/岗位|职务|职位|工种|职能/.test(t)) return 'position';
+      if (/地点|城市|地区|区域/.test(t)) return 'location';
+      if (/官网|链接|网址|url|主页|网站/.test(t)) return 'url';
+      return 'other';
+    });
+  }
+  const startIdx = headerMap ? 1 : 0;
+  const rows = [];
+  for (let i = startIdx; i < lines.length; i++) {
+    const line = lines[i];
+    const urlM = line.match(URL_RE);
+    const url = urlM ? urlM[1] : '';
+    const rest = urlM ? line.replace(urlM[0], '\t') : line;
+    const parts = rest.split(/\t|[，,；;、]|(?:\s{2,})/).map(s => s.trim()).filter(Boolean);
+    let company = '', position = '', location = '';
+    if (headerMap) {
+      parts.forEach((p, idx) => {
+        const f = headerMap[idx] || 'other';
+        if (f === 'company') company = p;
+        else if (f === 'position') position = p;
+        else if (f === 'location') location = p;
+      });
+    } else {
+      // 无表头：用城市正则定位地点，其余按序归公司/岗位
+      const locIdx = parts.findIndex(p => CITY_RE.test(p));
+      if (locIdx >= 0) { location = parts[locIdx]; parts.splice(locIdx, 1); }
+      if (parts.length >= 1) company = parts[0];
+      if (parts.length >= 2) position = parts.slice(1).join(' / ');
+    }
+    if (company || position || location || url) {
+      rows.push({ company: company.trim(), position: position.trim(), location: location.trim(), url: url.trim() });
+    }
+  }
+  return rows;
+}
+
+// AI 模式解析：复用 awaitAIModel，要求返回 JSON 数组
+async function aiParseJobs(text) {
+  const api = STORAGE.get('api', {});
+  if (!api.url || !api.key) throw new Error('未配置 API（请在设置页配置后使用 AI 模式）');
+  const system = `你是一个数据抽取助手。用户会粘贴一段包含多家公司招聘信息的内容（可能是表格文本、自由描述或混合格式）。请从中提取每一条「公司-岗位-工作地点-官网链接」记录，仅输出一个 JSON 数组，每个元素严格为 {"company":"公司名称","position":"岗位名称","location":"工作地点（没有则空字符串）","url":"官网链接（没有则空字符串）"}。不要输出任何解释、前言或后缀文字，只输出 JSON 数组本身。缺失字段填空字符串，不要编造官网链接。`;
+  const user = `请解析以下内容的求职记录：\n"""\n${text}\n"""`;
+  const { content, lastErr } = await awaitAIModel(api, '求职信息提取', user, [system], '', false, '', []);
+  if (!content) throw new Error(lastErr ? (lastErr.message || 'AI 解析失败') : 'AI 返回为空');
+  const arr = parseJsonArrayFromText(content);
+  if (!arr) throw new Error('AI 返回内容无法解析为 JSON 数组');
+  return arr.filter(r => r && typeof r === 'object')
+    .map(r => ({ company: String(r.company || '').trim(), position: String(r.position || '').trim(), location: String(r.location || '').trim(), url: String(r.url || '').trim() }))
+    .filter(r => r.company || r.position || r.location || r.url);
+}
+
+function openJobExtract() {
+  const html = makeModal('智能提取投递记录', `
+    <div style="background: var(--blue-light); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: var(--blue-dark);">
+      💡 把备份表格里的多行内容（公司 / 岗位 / 地点 / 官网）直接粘贴进来，自动分解写入「投递记录」。支持 Excel 复制（Tab 分隔）、CSV、逗号/空格分隔，可带表头。
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
+      <label style="font-size:13px; font-weight:600;">解析模式</label>
+      <select id="je_mode" class="form-input" style="width:auto;">
+        <option value="fast">快速解析（离线，推荐）</option>
+        <option value="ai">AI 智能解析（需配置 API）</option>
+      </select>
+      <label style="font-size:13px; font-weight:600; margin-left:8px;">默认状态</label>
+      <select id="je_status" class="form-input" style="width:auto;">
+        <option value="wishlist">意向</option>
+        <option value="applied" selected>已投递</option>
+        <option value="test">笔试</option>
+        <option value="interview">面试中</option>
+        <option value="offer">Offer</option>
+        <option value="rejected">已拒绝</option>
+      </select>
+    </div>
+    <div class="form-row"><label class="form-label">粘贴内容</label>
+      <textarea id="je_text" class="form-textarea" style="min-height:140px;" placeholder="示例：&#10;腾讯&#9;产品经理&#9;深圳&#9;https://careers.tencent.com&#10;字节跳动&#9;算法工程师&#9;北京&#9;https://jobs.bytedance.com"></textarea>
+    </div>
+    <div style="display:flex; gap:8px; margin: 12px 0; align-items:center;">
+      <button class="btn btn-primary" id="je_parse">解析预览</button>
+      <span id="je_tip" style="font-size:12px; color:var(--text-light);"></span>
+    </div>
+    <div id="je_preview"></div>
+    <div class="form-actions" id="je_actions" style="display:none;">
+      <button class="btn btn-primary" id="je_confirm">确认写入</button>
+      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+    </div>
+  `);
+  openModal(html);
+  let parsedRows = [];
+  const stageLabelMap = { wishlist: '意向', applied: '已投递', test: '笔试', interview: '面试中', offer: 'Offer', rejected: '已拒绝' };
+
+  const renderPreview = () => {
+    const prev = $('#je_preview');
+    const actions = $('#je_actions');
+    if (!parsedRows.length) { prev.innerHTML = ''; actions.style.display = 'none'; return; }
+    const head = `<div style="display:grid; grid-template-columns: 24px 1fr 1fr 1fr 1.6fr; gap:6px; padding:8px; font-weight:700; font-size:12px; background:var(--card); border-bottom:2px solid var(--border);"><div>✓</div><div>公司</div><div>岗位</div><div>地点</div><div>官网链接</div></div>`;
+    const rowsHtml = parsedRows.map((r, i) => `
+      <div style="display:grid; grid-template-columns: 24px 1fr 1fr 1fr 1.6fr; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--border); font-size:12px;">
+        <input type="checkbox" data-je-check="${i}" checked>
+        <div><strong>${escapeHtml(r.company || '—')}</strong></div>
+        <div style="color:var(--text-light);">${escapeHtml(r.position || '—')}</div>
+        <div style="color:var(--text-light);">${escapeHtml(r.location || '—')}</div>
+        <div style="color:var(--blue-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.url || '')}">${escapeHtml(r.url || '—')}</div>
+      </div>`).join('');
+    prev.innerHTML = `<div style="background:var(--bg); border-radius:10px; overflow:hidden; margin-bottom:12px;">${head}${rowsHtml}</div>`;
+    actions.style.display = 'flex';
+    $('#je_confirm').textContent = `确认写入 ${parsedRows.length} 条`;
+  };
+
+  $('#je_parse').onclick = async () => {
+    const text = $('#je_text').value.trim();
+    if (!text) { toast('请先粘贴内容', 'warn'); return; }
+    const mode = $('#je_mode').value;
+    const tip = $('#je_tip');
+    tip.textContent = '解析中…';
+    if (mode === 'fast') {
+      parsedRows = parseJobBatch(text);
+      if (!parsedRows.length) { tip.textContent = '未解析出记录，请检查格式'; toast('未解析出记录', 'warn'); renderPreview(); return; }
+      tip.textContent = `已解析 ${parsedRows.length} 条（快速模式）`;
+      renderPreview();
+      return;
+    }
+    try {
+      const api = STORAGE.get('api', {});
+      if (!api.url || !api.key) { toast('请先在设置页配置 API', 'warn'); tip.textContent = ''; return; }
+      const spin = document.createElement('span');
+      spin.className = 'je_spin';
+      spin.textContent = ' ⏳';
+      spin.style.fontSize = '12px'; spin.style.color = 'var(--text-light)';
+      $('#je_parse').insertAdjacentElement('afterend', spin);
+      parsedRows = await aiParseJobs(text);
+      spin.remove();
+      if (!parsedRows.length) { tip.textContent = 'AI 未返回有效记录'; toast('AI 未返回有效记录', 'warn'); renderPreview(); return; }
+      tip.textContent = `AI 解析完成 ${parsedRows.length} 条`;
+      renderPreview();
+    } catch (e) {
+      $('.je_spin')?.remove();
+      tip.textContent = 'AI 解析失败';
+      toast('AI 解析失败：' + (e.message || e), 'error');
+    }
+  };
+
+  $('#je_confirm').onclick = () => {
+    const checks = $$('[data-je-check]');
+    const selected = parsedRows.filter((r, i) => checks[i] && checks[i].checked);
+    if (!selected.length) { toast('请至少勾选一条', 'warn'); return; }
+    const status = $('#je_status').value;
+    const stage = stageLabelMap[status] || '已投递';
+    const td = today();
+    const arr = STORAGE.get('jobs', []);
+    const existing = new Set(arr.map(j => (j.company || '') + '|' + (j.position || '')));
+    let added = 0;
+    selected.forEach(r => {
+      const key = (r.company || '') + '|' + (r.position || '');
+      if (existing.has(key)) return;
+      arr.unshift({ id: uid(), company: r.company, position: r.position, location: r.location, salary: '', status, applyDate: td, url: r.url, timeline: [{ date: td, stage, note: '' }], note: '', pdfRef: null, pdfUrl: null, pdfKey: null, pdfName: null, pdfSize: null });
+      existing.add(key); added++;
+    });
+    STORAGE.set('jobs', arr);
+    closeModal(); render();
+    const skipped = selected.length - added;
+    toast(`已写入 ${added} 条${skipped > 0 ? `（${skipped} 条重复已跳过）` : ''}`, 'success');
+  };
 }
 
 function openResumeForm(id) {
@@ -4437,10 +4633,109 @@ function getExistingList(type) {
   return '';
 }
 
-function buildDedupHint(typeName, existing) {
-  if (!existing || !existing.trim()) return '';
-  const count = existing.split('\n').filter(Boolean).length;
-  return `在推荐新${typeName}前，请快速浏览已有的 ${count} 条记录，避免推荐完全相同的品牌/作品/方向。若已有相近条目，请换一个新角度、新案例或新平台来补充。不要因此跳过不输出。已有记录如下：\n${existing}`;
+function buildDedupHint(typeName, existing, sameInputTitles) {
+  const parts = [];
+  // 同一关键词下已产出过的条目：硬性禁止重复
+  if (Array.isArray(sameInputTitles) && sameInputTitles.length) {
+    parts.push(
+      `【同关键词去重 · 硬约束】你此前用完全相同的关键词已经产出过以下 ${sameInputTitles.length} 个条目：\n`
+      + sameInputTitles.slice(-30).map(t => '- ' + t).join('\n')
+      + `\n本次输出前必须逐条比对：严禁再次输出上列任何一个条目（同一品牌 + 同一活动/同一角度均视为重复）。`
+      + `请换用该行业/方向下的其他品牌、其他 campaign、其他年份的其他案例。`
+      + `这是硬性要求，违反则本次输出作废。`
+    );
+  }
+  // 全局已有记录：软性避免
+  if (existing && existing.trim()) {
+    const count = existing.split('\n').filter(Boolean).length;
+    parts.push(
+      `在推荐新${typeName}前，请快速浏览已有的 ${count} 条记录，避免推荐完全相同的品牌/作品/方向。若已有相近条目，请换一个新角度、新案例或新平台来补充。不要因此跳过不输出。已有记录如下：\n${existing}`
+    );
+  }
+  return parts.join('\n\n');
+}
+
+// ===== 同关键词产出日志：记录「type + 输入词」曾产出过哪些标题，供下次硬性去重 =====
+// 归一化：去掉空格/标点与常见后缀词，让「宠物经济」「宠物行业」「宠物赛道」命中同一份历史
+const DEDUP_STRIP_WORDS = ['行业', '产业', '经济', '赛道', '领域', '市场', '品类', '板块', '方向', '趋势', '消费', '的', '最新', '未来', '分析', '报告', '研究', '洞察', '发展', '情况', '现状', '前景'];
+function normalizeDedupInput(input) {
+  const raw = String(input || '').trim().toLowerCase();
+  let s = raw
+    .replace(/[\s\u3000]+/g, '')
+    .replace(/[，。、；：！？,.!?;:（）()【】\[\]"'·—\-_/\\|]+/g, '');
+  let prev;
+  let guard = 0;
+  do {
+    prev = s;
+    for (const w of DEDUP_STRIP_WORDS) { s = s.replace(new RegExp(w + '$'), ''); }
+  } while (s !== prev && s.length > 1 && ++guard < 6);
+  return s || raw;
+}
+function dedupLogKey(type, input) {
+  return type + '::' + normalizeDedupInput(input);
+}
+function getGeneratedTitles(type, input) {
+  if (!input) return [];
+  try {
+    const log = STORAGE.get('ai_dedup_log', {});
+    const v = log[dedupLogKey(type, input)];
+    return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
+}
+function recordGeneratedTitles(type, input, titles) {
+  if (!input || !Array.isArray(titles) || !titles.length) return;
+  try {
+    const log = STORAGE.get('ai_dedup_log', {});
+    const k = dedupLogKey(type, input);
+    const prev = Array.isArray(log[k]) ? log[k] : [];
+    const merged = prev.slice();
+    titles.forEach(t => { if (t && merged.indexOf(t) < 0) merged.push(t); });
+    log[k] = merged.slice(-60);   // 每个关键词最多留 60 条，避免无限膨胀
+    STORAGE.set('ai_dedup_log', log);
+    console.log('[去重] 已记录', titles.length, '条到', k, '，当前累计', log[k].length);
+  } catch (e) { console.warn('[去重] 记录失败', e); }
+}
+
+// ===== AI 去重记录：统计 / 清空 / 查看 =====
+function getDedupStat() {
+  try {
+    const log = STORAGE.get('ai_dedup_log', {}) || {};
+    const keys = Object.keys(log).length;
+    let items = 0;
+    Object.keys(log).forEach(k => { const a = log[k]; if (Array.isArray(a)) items += a.length; });
+    return { keys, items };
+  } catch (e) { return { keys: 0, items: 0 }; }
+}
+function clearDedupLog() {
+  confirm2('清空去重记录', '将清空所有 AI 生成的去重历史（关键词与已产出条目）。下次生成会重新从头去重，已保存的案例 / 趋势内容不受影响。确定？', () => {
+    STORAGE.set('ai_dedup_log', {});
+    toast('已清空去重记录', 'success');
+    render();
+  });
+}
+function viewDedupLog() {
+  let log;
+  try { log = STORAGE.get('ai_dedup_log', {}) || {}; } catch (e) { log = {}; }
+  const typeLabel = { case: '品牌案例', ent: '创业/企业', trend: '行业趋势', ai: 'AI 资讯' };
+  const keys = Object.keys(log);
+  if (!keys.length) {
+    openModal(makeModal('AI 去重记录', '<div style="padding:16px 4px;color:var(--text-light);">暂无去重记录。生成过 AI 内容（品牌案例 / 行业趋势 / 创业资讯 / AI 资讯）后会自动记录关键词与已产出条目，供下次去重使用。</div>'));
+    return;
+  }
+  const rows = keys.map(k => {
+    const idx = k.indexOf('::');
+    const type = idx > 0 ? k.slice(0, idx) : '';
+    const kw = idx >= 0 ? k.slice(idx + 2) : k;
+    const arr = Array.isArray(log[k]) ? log[k] : [];
+    const sample = arr.slice(0, 5).map(t => escapeHtml(t)).join('<br>');
+    const more = arr.length > 5 ? '<div style="color:var(--text-light);font-size:12px;margin-top:4px;">…等共 ' + arr.length + ' 条</div>' : '';
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;">'
+      + '<div style="font-weight:600;margin-bottom:6px;">' + escapeHtml(kw || '（未命名）') + ' <span style="font-size:12px;color:var(--text-light);font-weight:400;">· ' + (typeLabel[type] || type) + ' · ' + arr.length + ' 条</span></div>'
+      + '<div style="font-size:13px;line-height:1.7;">' + (sample || '<span style="color:var(--text-light)">（空）</span>') + more + '</div>'
+      + '</div>';
+  }).join('');
+  const html = makeModal('AI 去重记录', '<div style="max-height:62vh;overflow:auto;padding-right:4px;">' + rows + '</div>');
+  openModal(html);
 }
 
 // ===== 内容兜底提取：从 AI 响应 JSON 里找到正文 =====
@@ -4698,11 +4993,11 @@ async function fetchOneProvider(provider, query, q, key) {
 }
 
 // 通用模型调用：带空响应 / prompt echo 自动重试，返回 { content, lastErr }
-async function awaitAIModel(api, cfgLabel, userContent, extraSystemArr, dedupExisting, allowSimplify, webSearchQuery) {
+async function awaitAIModel(api, cfgLabel, userContent, extraSystemArr, dedupExisting, allowSimplify, webSearchQuery, sameInputTitles) {
   let content = '';
   let lastErr = null;
   for (let attempt = 1; attempt <= 2 && !content; attempt++) {
-    const dedupText = buildDedupHint(cfgLabel, attempt === 1 ? (dedupExisting || '') : '');
+    const dedupText = buildDedupHint(cfgLabel, attempt === 1 ? (dedupExisting || '') : '', attempt === 1 ? (sameInputTitles || []) : []);
     const systemRules = [].concat(extraSystemArr || [], [dedupText]).filter(Boolean).join('\n');
     const extra = (attempt === 2 && allowSimplify)
       ? '\n\n【重要补充】上一次输出无效。请务必直接输出案例分析/趋势分析正文，绝对禁止输出"去重要求"、"已有清单"、"请快速浏览"等提示词文字，禁止只回复"不了解"。'
@@ -4771,13 +5066,27 @@ async function aiGenerate(type, defaultValue) {
   const prompts = {
     case: {
       label: '品牌案例',
-      placeholder: '可输入任意关键词：品牌名（瑞幸）、品牌+案例（瑞幸×茅台 酱香拿铁）、行业+方向（互联网 AI反焦虑营销）。留空则 AI 自选 2 条不同行业',
+      placeholder: '可输入任意关键词：行业/赛道（制造业、宠物经济、银发经济、新能源…）、品牌名（瑞幸）、品牌+案例（瑞幸×茅台 酱香拿铁）。行业不限，留空则 AI 自选 2 条不同行业',
       prompt: (input) => {
         if (input) {
-          const isIndustry = /互联网|快消|食品|美妆|数码|运动|汽车|金融|文旅|教育|医疗|电商|零售|餐饮|家电|3C/.test(input);
-          const scope = isIndustry
-            ? `请搜索并拆解「${input}行业」内 2 个不同品牌的成功营销案例（2 条案例须来自同一行业内的不同品牌，或 1 条该行业 + 1 条相关对照行业）。`
-            : `请搜索并拆解与「${input}」相关的品牌营销案例（若「${input}」是品牌名，输出该品牌的 1 个代表性案例 + 1 条同行业对照案例；若「${input}」是具体案例/活动，直接拆解该案例 + 1 条同行业对照案例）。`;
+          const scope = `用户输入的关键词是：「${input}」
+
+【第一步：先判断输入属于哪一类，再按对应方式取材】
+A. 若「${input}」是**行业 / 赛道 / 品类 / 经济形态**（如：制造业、宠物经济、银发经济、新能源、咖啡赛道、户外运动、二手交易、跨境出海、农业、工业品、SaaS、医美、母婴、潮玩、香氛等）
+   → 在该范围内搜索 2 个不同主体的真实成功案例
+B. 若「${input}」是**品牌名**（如：瑞幸、lululemon、比亚迪）
+   → 输出该品牌 1 个代表性案例 + 1 条同行业对照案例
+C. 若「${input}」是**具体案例 / 活动 / campaign**（如：酱香拿铁、多巴胺穿搭）
+   → 直接拆解该案例 + 1 条同行业对照案例
+
+【第二步：行业范围不受任何预设清单限制 —— 严禁以"找不到"收场】
+- 任何行业、赛道、品类都必须照常处理，包括 B2B、传统制造业、农业、工业品、宠物、银发、二手、跨境、SaaS 等"看起来案例不多"的领域。
+- 严禁回复"该行业案例较少""没有找到公开案例""我无法获取"。
+- 若该行业直接的广告 campaign 确实稀少，按以下顺序扩展取材（仍须是真实案例）：
+  ① 该行业的上下游或关联消费品牌（如"宠物经济" → 宠物食品 / 宠物医疗 / 宠物服务 / 宠物智能硬件；"制造业" → 该制造企业的品牌化动作、工业品牌传播、出海品牌、面向 C 端的子品牌）
+  ② 该行业内真实发生的品牌动作 / 产品发布 / 创始人 IP / 社媒出圈事件 / 跨界联名 / 展会传播（不局限于传统广告 campaign）
+  ③ 仍不足时：输出 1 条本行业案例 + 1 条"打法可直接迁移"的跨行业对照案例，并在【行业】字段注明"跨行业对照"
+- 宁可放宽案例定义（品牌动作、产品叙事、传播事件都算），也不要回复"找不到"。`;
           return `${scope}
 
 【丰富度铁律】以下任一情况都视为不合格，必须避免：
@@ -4884,9 +5193,48 @@ async function aiGenerate(type, defaultValue) {
       }
     },
     trend: {
-      label: '2 条不同行业的趋势分析',
-      placeholder: '可选：行业关键词（留空让 AI 选互联网+快消）',
-      prompt: (input) => `请提供 2 条不同行业的最新、近期的趋势分析报告。${input ? `第一条与【${input}】相关，第二条选另一个不同行业` : '第一条选互联网行业，第二条选快消行业'}。
+      label: '行业趋势分析',
+      placeholder: '可输入：行业名（食品/美妆/日用品/互联网/AI/体育运动…）、"xx行业未来消费趋势"、"xx品牌Q1财报趋势"。留空则 AI 自选 2 个不同行业',
+      prompt: (input) => {
+        const scope = input
+? `用户输入的关键词是：「${input}」
+
+【第一步：识别输入意图，按对应方式取材】
+A. 若「${input}」是**行业 / 领域 / 赛道名称**（如：食品、美妆、日用品、互联网、AI、体育运动、母婴、宠物、3C数码、服饰、家居、汽车、文旅、教育、医疗健康、金融、新能源、农业、工业品、SaaS 等）
+   → 输出该行业内 **2 条不同细分方向**的趋势（如食品行业可拆"健康化/功能化"与"渠道折扣化"，不要同一方向换说法）
+   → 取材范围必须广，主动交叉以下 5 类信号源，不要只盯着广告营销：
+     ① 消费端：消费行为变化、品类增长与下滑、价格带迁移、渠道结构变化、人群结构（Z世代 / 银发 / 下沉市场 / 新中产）
+     ② 供给端：产业链上下游、产能与原材料、技术工艺迭代、商业模式创新、新品牌与新玩家
+     ③ 资本与政策：投融资并购、IPO 与上市动态、监管政策、行业标准与准入变化
+     ④ 数据与报告：麦肯锡、贝恩、BCG、尼尔森IQ、凯度、欧睿、艾瑞、QuestMobile、CBNData、阿里研究院、巨量算数、小红书商业动态等机构报告；以及上市公司财报 / 招股书披露的行业数据
+     ⑤ 平台与社媒：小红书 / 抖音 / 微博 / B站 / 知乎 的品类讨论热度、搜索指数、爆款内容特征
+
+B. 若「${input}」含**"消费趋势""未来趋势""消费洞察""用户需求"**等（如"食品行业未来消费趋势""美妆消费趋势"）
+   → 聚焦消费端：需求变化、购买决策链路、品类渗透率、客单价与购买频次、消费场景迁移、人群代际差异
+   → 每条必须有**数据锚点**（渗透率、同比增速、客单价、复购率、搜索/讨论热度等），并在【关键引用】给出具体数字
+   → 明确区分"已发生的结构性变化"与"正在萌芽的早期信号"，并各自标注确定性
+
+C. 若「${input}」含**"财报""Q1/Q2/Q3/Q4""季度""业绩""营收""年报"**等（如"安踏 Q1 财报趋势""某品牌 2026Q1 财报趋势"）
+   → 以财报 / 业绩数据为主轴：营收、利润、毛利率、同店或同口径增长、分品类 / 分渠道 / 分区域表现、库存周转、管理层指引变化
+   → **从数字反推行业趋势**，而不是复述财报本身（例："某品类营收增速 X% → 说明该细分赛道仍处高景气，且头部集中度在提升"）
+   → 若该主体非上市公司、无公开财报，改用其公开的业绩会、官方战报或第三方监测数据（魔镜、久谦、蝉妈妈、星图数据、萝卜投研等），并明确标注数据口径与来源
+   → **严禁编造精确数字**；查无实据时给"量级 / 区间 + （推测）"，并说明推算逻辑
+
+D. 若「${input}」是**具体趋势名 / 现象**（如"多巴胺穿搭""理性消费回归"）
+   → 直接拆解该趋势 + 1 条与之相关但方向不同的趋势
+
+【第二步：行业范围不受任何预设清单限制 —— 严禁以"找不到"收场】
+- 食品、美妆、日用品、互联网、AI、体育运动、母婴、宠物、服饰、家居、3C、汽车、文旅、教育、医疗健康、金融、新能源、农业、工业品、SaaS 等，任何行业 / 领域 / 赛道都照常处理
+- 严禁回复"该行业趋势不明显""没有找到公开报告""我无法获取"
+- 若该行业公开报告确实稀少，优先改用：上市公司财报与招股书、行业媒体深度报道、平台官方数据（巨量算数 / 小红书 / 阿里研究院）、第三方监测数据（魔镜 / 蝉妈妈 / 星图 / 久谦）
+
+【第三步：证据分级 —— 不许把行业共识当数据引用】
+- 每条趋势的【关键引用】必须带具体数字、时间、主体
+- 严格区分"事实 / 已披露数据"与"判断 / 推测"，推测处明确标注"（推测）"并给出推演依据
+- 无法核实的数据宁可用区间表述 + 标注口径，也不要编造精确值`
+: `请自选 2 个不同行业（从食品、美妆、日用品、互联网、AI、体育运动、母婴、宠物、汽车、医疗健康等中任选 2 个不同的），各输出 1 条最新趋势。
+每条趋势取材时主动交叉 5 类信号源：①消费端行为与人群结构 ②供给端产业链与商业模式 ③资本与政策 ④权威机构报告与上市公司财报 ⑤社媒平台讨论热度。不要只盯着广告营销。`;
+        return `${scope}
 
 【丰富度铁律】以下任一情况都视为不合格，必须避免：
 - 任何要点只用标签式短语（如"理性消费回归""体验经济崛起"）而没有展开
@@ -4896,20 +5244,21 @@ async function aiGenerate(type, defaultValue) {
 参考标杆：每条核心内容应是"事实/数据 + 驱动机制 + 对品牌营销启示"的完整三段，而非一句话标签。
 
 要求：
-1. 引用最新、近期的专业分析机构观点，优先 2025-2026 年报告
+1. 引用最新、近期的数据与观点，优先 2025-2026 年的机构报告、上市公司财报/业绩会、平台官方数据
 2. 重点关注中国市场，兼顾海外动向
-3. 每条趋势按"核心内容 → 关键引用 → 数据来源 → 我的笔记"结构，2 条之间用 "=====趋势2=====" 分隔：
+3. 若输入指定了行业，2 条趋势都围绕该行业（不同细分方向）；若输入是财报/消费趋势等专项，2 条都围绕该专项展开，第二条第 1 句注明与第一条的差异点
+4. 每条趋势按"核心内容 → 关键引用 → 数据来源 → 我的笔记"结构，2 条之间用 "=====趋势2=====" 分隔：
 
 【趋势 1】
 【标题】
-（趋势名，含行业/赛道）
+（趋势名，含行业/赛道与细分方向）
 【行业】
 【核心内容】
-（3-4 段关键洞察，每段 2-3 句：先给趋势事实/数据，再解释底层驱动机制，最后点出对品牌营销的启示；禁止只列名词）
+（3-4 段关键洞察，每段 2-3 句：先给趋势事实/数据，再解释底层驱动机制，最后点出对品牌营销或商业决策的启示；禁止只列名词）
 【关键引用】
-（1-2 句来自机构报告的原话或核心数据，带来源）
+（1-2 句来自机构报告/财报/平台数据的原话或核心数据，必须带具体数字、时间、主体，并注明出处）
 【数据来源】
-（2-4 条具体机构+报告名，如"麦肯锡《2026 全球消费者趋势报告》""QuestMobile 2026 春季报告"）
+（2-4 条具体机构+报告名/财报名/平台数据名，如"麦肯锡《2026 全球消费者趋势报告》""QuestMobile 2026 春季报告""安踏体育 2026Q1 业绩公告""巨量算数食品饮料行业报告"）
 【我的笔记】
 （2 点个人洞察：该趋势对品牌营销/个人意味着什么、可复用的判断框架）
 
@@ -4918,25 +5267,44 @@ async function aiGenerate(type, defaultValue) {
 【趋势 2】
 （同上格式）
 
-请直接输出。`
+请直接输出。`;
+      }
     },
     ai: {
       label: '今日 AI 行业动态',
-      placeholder: '可输入具体方向，或点击下方标签快速填充',
+      placeholder: '可输入：方向/技术名（AI行业/大模型/AI Agent/AI 编程…）、组合指令词（"AI行业未来消费趋势""OpenAI Q1 财报趋势""AI 应用消费趋势"）、或点击下方标签。留空则 AI 自选最值得关注动态',
       tags: [
         { label: '大模型进展', value: 'GPT-5 / Claude 4 / Gemini 2 / 国产大模型能力进展与发布' },
         { label: 'AI Agent', value: 'AI Agent 产品落地、企业应用与商业化进展' },
         { label: 'AI 应用', value: 'AI 应用产品新动向、用户增长与商业模式' },
+        { label: 'AI 行业趋势', value: 'AI行业未来消费趋势（用户采纳/付费结构/应用场景迁移/人群差异，含数据锚点）' },
+        { label: 'AI 财报趋势', value: 'AI 公司 Q1/年度财报趋势（OpenAI/商汤/国内大模型 营收研发投入用户调用量，从数字反推行业）' },
         { label: 'AI 品牌营销', value: 'OpenAI / Anthropic / xAI / 字节豆包 / 阿里通义 / 百度文心 / 腾讯混元 / 智谱 / Kimi / DeepSeek 等 AI 公司自身品牌营销案例' },
         { label: 'AI 文化', value: 'AI 原生内容、AI 影视/音乐/艺术、大众文化现象与社交媒体讨论' },
         { label: '社媒趋势', value: 'Reddit / X / 小红书 / 知乎 上的 AI 讨论热点与用户反馈' }
       ],
       prompt: (input) => {
-        const isMarketing = /品牌营销|营销|品牌|文化|公关|传播/.test(input || '');
-        const direction = isMarketing
-          ? '海内外互联网行业 2025 至今的 AI 模型公司或互联网公司自身的品牌营销案例与 AI 文化现象，严禁涉及"AI 工具如何赋能第三方品牌营销"。重点关注：OpenAI、Anthropic、xAI、Google DeepMind、Meta AI、字节跳动豆包、阿里通义、百度文心、腾讯混元、智谱、月之暗面 Kimi、DeepSeek 等 AI 公司的产品发布会营销、AI 大会营销、品牌短片、AI 文化现象级传播、创始人公关叙事等真实或高度可推测案例。'
-          : (input || 'AI 模型 / Agent / 应用程序 / 国内 AI 品牌营销 / 社媒平台 AI 应用趋势（Reddit、X、小红书、知乎）');
-        return `请汇总 2026 年最新、近期的 AI 行业动态，重点关注方向：${direction}。
+        const scope = input
+          ? `用户输入的关键词是：「${input}」
+
+【第一步：先判断输入属于哪一类，再按对应方式聚焦】
+A. 若「${input}」是**行业 / 领域 / 方向 / 技术名称**（如：AI行业、大模型、AI Agent、AI 编程、AI 视频、AI 营销、AI 医疗、AI 教育、多模态、具身智能、推理模型等）
+   → 汇总该方向 2026 年最新、近期的 AI 行业动态与进展（交叉：模型能力、产品落地、商业化、投融资、监管、社媒讨论）
+B. 若「${input}」含**"趋势""消费趋势""未来""洞察""用户需求"**等（如"AI行业未来消费趋势""AI应用消费趋势"）
+   → 聚焦 AI 消费端 / 应用端趋势：用户采纳行为、付费意愿与结构、品类增长、企业与个人应用场景迁移、人群差异；每条需有数据锚点（用户规模/增速/客单价/渗透率/讨论度），猜测处标注（推测）
+C. 若「${input}」含**"财报""Q1/Q2/Q3/Q4""季度""业绩""营收""年报"**等（如"OpenAI Q1 财报趋势""商汤 2026 业绩趋势"）
+   → 以财报/业绩数据为主轴：营收、亏损/利润、研发投入、云/API 收入、用户与调用量、分业务表现、管理层指引；从数字反推 AI 行业趋势；非上市主体改用第三方估算（Similarweb、Sensor Tower、AI 产品榜、官方战报），严禁编造精确数字
+D. 若「${input}」是**具体产品 / 模型 / 事件名**（如：GPT-5、DeepSeek-R1、某发布会、某收购）
+   → 直接拆解该事件 + 1 条相关对照动态
+E. 若「${input}」含**"品牌营销""营销""品牌""传播""公关""文化"**（如"AI 公司品牌营销"）
+   → 聚焦 AI 公司自身品牌营销案例与 AI 文化现象（OpenAI、Anthropic、xAI、Google DeepMind、Meta AI、字节豆包、阿里通义、百度文心、腾讯混元、智谱、月之暗面 Kimi、DeepSeek 等的发布会营销、AI 大会营销、品牌短片、文化现象级传播、创始人公关叙事），严禁第三方视角
+
+【第二步：AI 范围不受任何预设清单限制 —— 严禁以"找不到"收场】
+- 模型、Agent、应用、算力、芯片、开源、多模态、具身智能、行业落地（医疗/教育/金融/制造/营销）、国内大模型（豆包/通义/文心/混元/智谱/Kimi/DeepSeek/阶跃/MiniMax）等，任何 AI 方向都照常处理
+- 严禁回复"该方向动态较少""没有找到公开信息""我无法获取"
+- 若该方向公开动态稀少，优先改用：公司官方博客/公告、The Verge/TechCrunch/机器之心/量子位等媒体、官方战报与发布会、第三方监测（Similarweb/Sensor Tower/AI 产品榜）`
+          : `请汇总 2026 年最新、近期的 AI 行业动态，方向不限（模型 / Agent / 应用 / 国内 AI 品牌营销 / 社媒平台 AI 应用趋势 均可），重点挖掘最值得关注的 1 个新闻或趋势。`;
+        return `请汇总 2026 年最新、近期的 AI 行业动态，重点关注方向：${scope}。
 
 【丰富度铁律】以下任一情况都视为不合格，必须避免：
 - 任何字段只有一句话标签而没有展开
@@ -4975,29 +5343,41 @@ async function aiGenerate(type, defaultValue) {
     },
     ent: {
       label: '文娱行业学习',
-      placeholder: '可输入任意关键词：平台名（爱奇艺/大麦网/泡泡玛特/米哈游）、具体行业（演出市场/电视剧/电影/网络文学）、或方向组合（国风音乐营销）。留空则 AI 自选 2 个不同细分领域',
+      placeholder: '可输入：行业/领域（文娱行业、影视、游戏、动漫、短视频、演唱会…）、平台/作品名（爱奇艺/《漂白》/米哈游）、或组合指令词（"文娱行业未来消费趋势""影视行业内容营销趋势""游戏行业出海趋势"）。留空则 AI 自选 2 个不同细分领域',
       tags: [
-        { label: '中国演出市场', value: '2025-2026 中国演出市场（演唱会/音乐节/话剧/戏曲/Livehouse）现状与成功营销案例' },
-        { label: '电视剧市场', value: '2025-2026 中国电视剧市场 现状与爆款剧成功案例' },
-        { label: '电影市场', value: '2025-2026 中国电影市场 现状与票房/口碑成功案例' },
-        { label: '互联网娱乐产业', value: '2025-2026 中国互联网娱乐产业（短视频/长视频/直播）现状与平台成功案例' },
-        { label: '网络娱乐行业', value: '2025-2026 中国网络娱乐行业（网文/动漫/游戏/IP衍生）现状与成功案例' }
+        { label: '文娱行业全景', value: '文娱行业（演出/影视/综艺/音乐/游戏/动漫/网文/短视频/直播/IP衍生）2025-2026 成功案例与打法' },
+        { label: '影视行业', value: '影视行业（剧集营销/电影档期/长视频平台）2025-2026 成功案例' },
+        { label: '游戏与二次元', value: '游戏行业（手游/单机/二次元/IP联动）2025-2026 成功案例与出海打法' },
+        { label: '音乐演出', value: '音乐演出行业（演唱会/音乐节/Livehouse/票务平台）2025-2026 成功案例' },
+        { label: '文娱消费趋势', value: '文娱行业未来消费趋势（内容消费行为/付费结构/平台迁移/Z世代与银发人群差异）' },
+        { label: '文娱财报趋势', value: '文娱公司 Q1/年度财报趋势（芒果超媒/光线/阅文/B站/爱奇艺 营收会员票房与内容成本）' }
       ],
       prompt: (input) => {
         const titleRule = '标题必须同时包含：主体/平台名 + 作品/案例/活动名 + 核心看点。示例：爱奇艺《漂白》：悬疑赛道的社会派回归与剧场品牌沉淀；大麦网「周杰伦嘉年华」：演出票务平台的沉浸式宣发；米哈游《崩坏：星穹铁道》× 故宫联动：传统文化年轻化破圈。';
         if (input) {
-          return `请基于你所知的信息，分析与以下关键词相关的中国文娱行业成功案例。
+          const scope = `用户输入的关键词是：「${input}」
 
-关键词：${input}
+【第一步：先判断输入属于哪一类，再按对应方式取材】
+A. 若「${input}」是**行业 / 领域 / 平台 / 赛道名称**（如：文娱行业、影视、电影、电视剧、综艺、演出、演唱会、音乐节、游戏、动漫、网文、短视频、直播、长视频、互联网娱乐、网络文学、IP衍生、二次元、粉丝经济、线下演艺等）
+   → 在该范围内拆解 2 条不同细分方向/不同主体的真实成功案例（如"影视"可拆"剧集营销"与"电影档期营销"，不要同一方向换说法）
+B. 若「${input}」含**"趋势""消费趋势""未来""洞察""用户需求""内容消费"**等（如"文娱行业未来消费趋势""影视内容消费趋势"）
+   → 仍输出 2 条文娱案例，但每条必须贯穿"消费趋势"视角：在【策略】点明它抓住了哪类用户需求变化，在【成效】尽量给品类/消费数据锚点（票房/播放量/会员数/付费率/讨论度），在【我的笔记】提炼可迁移的消费趋势洞察
+C. 若「${input}」含**"财报""Q1/Q2/Q3/Q4""季度""业绩""营收""年报"**等（如"芒果超媒 Q1 财报趋势""影视公司 2026 业绩趋势"）
+   → 围绕财报/业绩披露的主体（芒果超媒、光线传媒、阅文、B站、爱奇艺、猫眼、稻草熊等）拆解 2 条文娱案例，【成效】需含营收/会员/票房/内容成本等数据，【我的笔记】含"从数字反推的行业趋势"；非上市主体改用第三方数据（云合、艺恩、骨朵、猫眼、灯塔、QuestMobile），严禁编造精确数字
+D. 若「${input}」是**具体案例 / 作品 / 活动 / 平台名**（如：某剧、某演唱会、某游戏、爱奇艺、《漂白》）
+   → 直接拆解该案例/作品 + 1 条同细分方向对照案例
 
-分析要求（给 AI 最大自由度）：
-1. 如果你了解这个案例的真实情况 → 基于真实信息详细拆解
-2. 如果你了解该平台/行业但不了解这个具体案例 → 基于其特点、行业趋势和常见打法分析推测（标注"推测"）
-3. 如果你完全不了解 → 请说明，并推荐该平台或同行业类似的优秀案例
-4. 不要因为不确定就返回空内容，务必给出有价值的分析
-5. 聚焦 2025-2026 年，优先最新、近期、真实可查的内容
-6. ${titleRule}
-7. 若对该关键词完全不了解，请基于同类平台 / 作品的通用成功打法，自行构造 1 条【通用分析】案例（在标题或策略处标注"通用分析"），严禁输出空白或只回复"不了解"
+【第二步：文娱范围不受任何预设清单限制 —— 严禁以"找不到"收场】
+- 演出、电视剧、电影、综艺、音乐、游戏、动漫、网文、短视频、直播、长视频、互联网娱乐、网络文学、IP衍生、二次元、粉丝经济、线下演艺等，任何文娱细分都照常处理
+- 严禁回复"该领域案例较少""没有找到公开案例""我无法获取"
+- 若该领域公开案例稀少，按①上下游/关联平台 ②行业内真实品牌动作/出圈事件/跨界联动 ③跨领域可迁移对照 的顺序扩展取材，宁可放宽案例定义（品牌动作、产品叙事、传播事件都算），也不要回复"找不到"
+
+【第三步：通用要求】
+- 聚焦 2025-2026 年，优先最新、近期、真实可查的内容
+- 若对该关键词完全不了解，请基于同类平台 / 作品的通用成功打法，自行构造 1 条【通用分析】案例（在标题或策略处标注"通用分析"），严禁输出空白或只回复"不了解"`;
+          return `${scope}
+
+${titleRule}
 
 【丰富度铁律】以下情形一律视为不合格、必须重写：
 - 每条策略只写"话题营销""跨界联动""内容创新"之类标签式短语，没有具体动作
@@ -5026,7 +5406,7 @@ async function aiGenerate(type, defaultValue) {
 
 请直接输出，不要寒暄，不要说"我不了解"就结束，必须输出完整的分析内容（即使需要推测或通用分析，也必须输出完整结构，且每字段充实）。`;
         }
-        return `请拆解 2 个不同细分领域的中国文娱行业成功案例。领域限定在：演出市场（演唱会/音乐节/话剧/戏曲/Livehouse）、电视剧市场、电影市场、互联网娱乐产业（短视频/长视频/直播）、网络娱乐行业（网文/动漫/游戏/IP衍生）中选 2 个不同的。
+        return `请拆解 2 个不同细分领域的中国文娱行业成功案例。领域可从以下或任何你熟悉的其他文娱细分中选 2 个不同的：演出市场（演唱会/音乐节/话剧/戏曲/Livehouse）、电视剧市场、电影市场、综艺市场、音乐产业、游戏行业（手游/单机/二次元/IP联动）、动漫与网文、互联网娱乐产业（短视频/长视频/直播）、网络娱乐行业（IP衍生/粉丝经济/线下演艺）。
 
 要求：
 1. 案例必须是 2025-2026 年最新、近期的真实事件，越新越好
@@ -5172,6 +5552,9 @@ ${input ? `补充要求：${input}` : ''}
   if (modalResult === null || modalResult === undefined) return;
   input = modalResult.input || '';
   filters = modalResult.filters || filters;
+  // 同一关键词下此前已产出过的条目 → 传给模型做硬性去重
+  const sameInputTitles = getGeneratedTitles(type, input);
+  if (sameInputTitles.length) console.log('[去重] 关键词「' + input + '」历史产出', sameInputTitles.length, '条，已注入硬约束');
 
   // ===== 生成方式：AI 检索 / 联网检索（可单选或组合） =====
   let useAI = !!(filters.useAI);
@@ -5231,7 +5614,7 @@ ${input ? `补充要求：${input}` : ''}
 
     if (useAI && useWeb) {
       // 阶段1：AI 基于自身知识生成初稿
-      const r1 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true, input);
+      const r1 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true, input, sameInputTitles);
       const aiDraft = r1.content;
       // 阶段2：与联网资料交叉核对、纠错、整合
       const crossUser = '【B部分：联网检索资料】\n' + (searchBlock || '') + '\n\n' + buildCrossCheckPrompt(aiDraft, cfg, input);
@@ -5240,15 +5623,15 @@ ${input ? `补充要求：${input}` : ''}
       if (r2.content) content = r2.content;
       else if (aiDraft) { content = aiDraft; lastErr = r2.lastErr; }
       else if (searchBlock) {
-        const r3 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + '\n\n' + searchBlock + '\n\n' + buildFilterRules(filters, { webActive: true }), baseSystem.concat(webGrounding), existing, true);
+        const r3 = await awaitAIModel(api, cfg.label, cfg.prompt(input) + '\n\n' + searchBlock + '\n\n' + buildFilterRules(filters, { webActive: true }), baseSystem.concat(webGrounding), existing, true, undefined, sameInputTitles);
         content = r3.content; lastErr = r3.lastErr;
       } else { lastErr = r2.lastErr; }
       if (!lastErr && (r1.lastErr || r2.lastErr)) lastErr = r2.lastErr || r1.lastErr;
     } else if (useAI && !useWeb) {
-      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true, input);
+      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + buildFilterRules(filters, { webActive: false }), baseSystem, existing, true, input, sameInputTitles);
       content = r.content; lastErr = r.lastErr;
     } else if (!useAI && useWeb) {
-      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + '\n\n' + searchBlock + '\n\n' + buildFilterRules(filters, { webActive: true }), baseSystem.concat(webGrounding).concat(['优先基于上方【联网检索资料】作答并引用真实出处；若检索资料不足以覆盖全部要求（如缺少第 2 条案例），允许用你自身知识补充，但补充内容必须明确标注"（推测/资料未确认）"，且仍须输出完整结构，严禁整段留白或仅回复"无法生成"。']), existing, true);
+      const r = await awaitAIModel(api, cfg.label, cfg.prompt(input) + '\n\n' + searchBlock + '\n\n' + buildFilterRules(filters, { webActive: true }), baseSystem.concat(webGrounding).concat(['优先基于上方【联网检索资料】作答并引用真实出处；若检索资料不足以覆盖全部要求（如缺少第 2 条案例），允许用你自身知识补充，但补充内容必须明确标注"（推测/资料未确认）"，且仍须输出完整结构，严禁整段留白或仅回复"无法生成"。']), existing, true, undefined, sameInputTitles);
       content = r.content; lastErr = r.lastErr;
     }
 
@@ -5258,7 +5641,7 @@ ${input ? `补充要求：${input}` : ''}
       const retryR = await awaitAIModel(
         api, cfg.label,
         cfg.prompt(input) + buildFilterRules(Object.assign({}, filters, { reliability: 'speculative' }), { webActive: false }),
-        baseSystem, existing, true, useAI ? input : undefined
+        baseSystem, existing, true, useAI ? input : undefined, sameInputTitles
       );
       if (retryR.content && !looksLikeRefusal(retryR.content)) {
         content = retryR.content;
@@ -5400,6 +5783,7 @@ function parseAndSave(type, content, input, searchSources) {
         const arr = STORAGE.get('cases', []);
         confirmed.forEach(obj => arr.unshift(obj));
         STORAGE.set('cases', arr);
+        recordGeneratedTitles('case', input, confirmed.map(x => (x.brand ? x.brand + '：' : '') + (x.title || '')));
         toast(`✅ 已保存 ${confirmed.length} 条品牌案例`, 'success');
         if (currentSection === 'career') render();
       });
@@ -5468,6 +5852,7 @@ function parseAndSave(type, content, input, searchSources) {
         const arr = STORAGE.get('ent', []);
         confirmed.forEach(obj => arr.unshift(obj));
         STORAGE.set('ent', arr);
+        recordGeneratedTitles('ent', input, confirmed.map(x => (x.brand ? x.brand + '：' : '') + (x.title || '')));
         toast(`✅ 已保存 ${confirmed.length} 条文娱案例`, 'success');
         if (currentSection === 'career') render();
       });
@@ -5500,6 +5885,7 @@ function parseAndSave(type, content, input, searchSources) {
       }
     });
     toast(`✅ 已生成并保存 ${saved.length} 条行业趋势`, 'success');
+    recordGeneratedTitles('trend', input, saved.map(x => (x.industry ? x.industry + '：' : '') + (x.title || '')));
     if (currentSection === 'career') render();
   } else if (type === 'ai') {
     const s = extractSections(content, ['标题', '类别', '来源', '数据来源', '内容摘要', '关键细节', '为什么值得关注', '延伸阅读', '链接关键词', '我的笔记']);
@@ -5523,6 +5909,7 @@ function parseAndSave(type, content, input, searchSources) {
       const arr = STORAGE.get('ai_news', []);
       arr.unshift(obj);
       STORAGE.set('ai_news', arr);
+      recordGeneratedTitles('ai', input, [(obj.category ? obj.category + '：' : '') + obj.title]);
       toast('✅ 已生成并保存 1 条 AI 动态', 'success');
       if (currentSection === 'career') render();
     }
